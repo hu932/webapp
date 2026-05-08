@@ -1,0 +1,9 @@
+Package: com.codex.shopeetaskhook
+Name: Shopee Task Hook Rebuild
+Version: 0.1.0
+Architecture: iphoneos-arm
+Description: Rebuilt Shopee task helper for iOS 15/16 rootless devices.
+Maintainer: Codex
+Author: Codex
+Section: Tweaks
+Depends: firmware (>= 14.0)

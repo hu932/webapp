@@ -1,0 +1,99 @@
+name: Build Deb
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install base packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl git make perl xz-utils tar zip unzip file
+
+      - name: Bootstrap Theos source and SDK
+        env:
+          THEOS: ${{ github.workspace }}/theos
+        run: |
+          git clone --recursive https://github.com/theos/theos.git "$THEOS"
+          mkdir -p "$THEOS/sdks"
+          curl -fsSL https://github.com/theos/sdks/releases/latest/download/iPhoneOS16.5.sdk.tar.xz | tar -xJ -C "$THEOS/sdks"
+
+      - name: Install Theos
+        env:
+          CI: "1"
+          THEOS: ${{ github.workspace }}/theos
+        run: |
+          bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)"
+          echo "THEOS=${THEOS}" >> "$GITHUB_ENV"
+
+      - name: Build rootless deb
+        id: build_rootless
+        continue-on-error: true
+        env:
+          THEOS: ${{ env.THEOS }}
+        run: |
+          set -o pipefail
+          make clean
+          make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless 2>&1 | tee build-rootless.log
+          mkdir -p output
+          find . -name "*.deb" -path "*packages*" -exec cp {} output/ \;
+          for f in output/*.deb; do
+            [ -f "$f" ] && mv "$f" "${f%.deb}-rootless.deb"
+          done
+
+      - name: Build rootful deb
+        id: build_rootful
+        continue-on-error: true
+        env:
+          THEOS: ${{ env.THEOS }}
+        run: |
+          set -o pipefail
+          make clean
+          rm -rf packages/ .theos/_/packages/
+          make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME= 2>&1 | tee build-rootful.log
+          find . -name "*.deb" -path "*packages*" -exec cp {} output/ \;
+          for f in output/*.deb; do
+            echo "$f" | grep -q "rootless" && continue
+            [ -f "$f" ] && mv "$f" "${f%.deb}-rootful.deb" 2>/dev/null || true
+          done
+
+      - name: Summarize build failure
+        if: steps.build_rootless.outcome != 'success' || steps.build_rootful.outcome != 'success'
+        shell: bash
+        run: |
+          {
+            echo "## Build results"
+            echo
+            echo "### Rootless: ${{ steps.build_rootless.outcome }}"
+            echo '```text'
+            grep -n "error:" build-rootless.log | tail -n 20 || echo "no errors"
+            echo '```'
+            echo
+            echo "### Rootful: ${{ steps.build_rootful.outcome }}"
+            echo '```text'
+            grep -n "error:" build-rootful.log | tail -n 20 || echo "no errors"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload deb artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shopee-task-hook-deb
+          path: |
+            build-rootless.log
+            build-rootful.log
+            output/*.deb
+
+      - name: Fail workflow if any build failed
+        if: steps.build_rootless.outcome != 'success' || steps.build_rootful.outcome != 'success'
+        run: exit 1
