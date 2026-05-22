@@ -906,9 +906,6 @@ static NSString *SHPJSONStringFromObject(id object) {
     self.passwordField.autocorrectionType = UITextAutocorrectionTypeNo;
     self.passwordField.autocapitalizationType = UITextAutocapitalizationTypeNone;
     self.passwordField.clearButtonMode = UITextFieldViewModeNever;
-    if ([self.passwordField respondsToSelector:@selector(setTextContentType:)]) {
-        ((void (*)(id, SEL, id))objc_msgSend)(self.passwordField, @selector(setTextContentType:), @"password");
-    }
     [self installPasswordVisibilityButton];
     [self setPasswordVisible:NO];
     [self.panelView addSubview:self.passwordField];
@@ -1077,20 +1074,9 @@ static NSString *SHPJSONStringFromObject(id object) {
 
 - (void)updatePasswordVisibilityButton {
     BOOL visible = self.passwordField && !self.passwordField.secureTextEntry;
-    UIImage *image = nil;
-    SEL imageSelector = NSSelectorFromString(@"systemImageNamed:");
-    if ([UIImage respondsToSelector:imageSelector]) {
-        image = ((UIImage *(*)(id, SEL, NSString *))objc_msgSend)([UIImage class], imageSelector, (visible ? @"eye.slash" : @"eye"));
-    }
-
-    if (image) {
-        [self.passwordVisibilityButton setImage:image forState:UIControlStateNormal];
-        [self.passwordVisibilityButton setTitle:nil forState:UIControlStateNormal];
-        self.passwordVisibilityButton.accessibilityLabel = visible ? @"Hide password" : @"Show password";
-    } else {
-        [self.passwordVisibilityButton setImage:nil forState:UIControlStateNormal];
-        [self.passwordVisibilityButton setTitle:(visible ? @"Hide" : @"Show") forState:UIControlStateNormal];
-    }
+    [self.passwordVisibilityButton setImage:nil forState:UIControlStateNormal];
+    [self.passwordVisibilityButton setTitle:(visible ? @"Hide" : @"Show") forState:UIControlStateNormal];
+    self.passwordVisibilityButton.accessibilityLabel = visible ? @"Hide password" : @"Show password";
 }
 
 - (UIButton *)makeButtonWithTitle:(NSString *)title color:(UIColor *)color {
@@ -2659,12 +2645,11 @@ static NSString *SHPJSONStringFromObject(id object) {
     self.pendingSubmitSourceURL = [submitURL copy];
 
     NSString *username = SHPStringValue(self.usernameField.text) ?: [self savedUsername] ?: @"";
-    NSMutableDictionary *body = [NSMutableDictionary dictionaryWithDictionary:@{
-        @"act": @"api1_submit",
-        @"appVersion": kSHPSubmitAppVersion,
-        @"url": submitURL ?: @"",
-        @"result": jsonString
-    }];
+    NSMutableDictionary *body = [NSMutableDictionary dictionary];
+    [body setObject:@"api1_submit" forKey:@"act"];
+    [body setObject:kSHPSubmitAppVersion forKey:@"appVersion"];
+    [body setObject:(submitURL ?: @"") forKey:@"url"];
+    [body setObject:jsonString forKey:@"result"];
     if (username.length) {
         [body setObject:username forKey:@"username"];
     }
