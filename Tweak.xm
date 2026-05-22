@@ -1719,10 +1719,6 @@ static NSString *SHPJSONStringFromObject(id object) {
     if (resolvedUsername.length) {
         payload[@"username"] = resolvedUsername;
     }
-    if (self.deviceID.length) {
-        payload[@"device_id"] = self.deviceID;
-        payload[@"fingerprint_key"] = self.deviceID;
-    }
     payload[@"api_type"] = @1;
     payload[@"client"] = @"ShopeeTaskHook";
     payload[@"platform"] = @"ios";
@@ -1897,7 +1893,7 @@ static NSString *SHPJSONStringFromObject(id object) {
     }
 
     [self appendLog:@"登录中..."];
-    NSDictionary *loginBody = [self controlPayloadWithAction:@"api1_login" username:username extra:@{@"password": password}];
+    NSDictionary *loginBody = @{@"username": username, @"password": password};
     [self sendJSONRequestToURL:kSHPLoginURL method:@"POST" body:loginBody authorized:NO completion:^(NSInteger statusCode, id jsonObject, NSData *data, NSError *error) {
         if (error) {
         [self appendLog:[NSString stringWithFormat:@"登录失败:%@", error.localizedDescription ?: @"err"]];
