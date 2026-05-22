@@ -906,8 +906,8 @@ static NSString *SHPJSONStringFromObject(id object) {
     self.passwordField.autocorrectionType = UITextAutocorrectionTypeNo;
     self.passwordField.autocapitalizationType = UITextAutocapitalizationTypeNone;
     self.passwordField.clearButtonMode = UITextFieldViewModeNever;
-    if (@available(iOS 11.0, *)) {
-        self.passwordField.textContentType = UITextContentTypePassword;
+    if ([self.passwordField respondsToSelector:@selector(setTextContentType:)]) {
+        ((void (*)(id, SEL, id))objc_msgSend)(self.passwordField, @selector(setTextContentType:), @"password");
     }
     [self installPasswordVisibilityButton];
     [self setPasswordVisible:NO];
@@ -1080,7 +1080,7 @@ static NSString *SHPJSONStringFromObject(id object) {
     UIImage *image = nil;
     SEL imageSelector = NSSelectorFromString(@"systemImageNamed:");
     if ([UIImage respondsToSelector:imageSelector]) {
-        image = ((UIImage *(*)(id, SEL, NSString *))objc_msgSend)(UIImage.class, imageSelector, (visible ? @"eye.slash" : @"eye"));
+        image = ((UIImage *(*)(id, SEL, NSString *))objc_msgSend)([UIImage class], imageSelector, (visible ? @"eye.slash" : @"eye"));
     }
 
     if (image) {
@@ -2666,14 +2666,14 @@ static NSString *SHPJSONStringFromObject(id object) {
         @"result": jsonString
     }];
     if (username.length) {
-        body[@"username"] = username;
+        [body setObject:username forKey:@"username"];
     }
     if (self.deviceID.length) {
-        body[@"device_id"] = self.deviceID;
-        body[@"fingerprint_key"] = self.deviceID;
+        [body setObject:self.deviceID forKey:@"device_id"];
+        [body setObject:self.deviceID forKey:@"fingerprint_key"];
     }
     if (self.token.length) {
-        body[@"auth_token"] = self.token;
+        [body setObject:self.token forKey:@"auth_token"];
     }
 
     [self appendLog:@"提交中..."];
