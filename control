@@ -1,0 +1,9 @@
+Package: com.codex.shopeetaskhook
+Name: Gejieios
+Version: 0.1.0
+Architecture: iphoneos-arm
+Description: Rebuilt Shopee task helper for iOS 15/16 rootless devices.
+Maintainer: J
+Author: J
+Section: Tweaks
+Depends: firmware (>= 14.0)
