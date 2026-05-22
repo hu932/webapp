@@ -746,12 +746,20 @@ static NSString *SHPJSONStringFromObject(id object) {
 }
 
 - (NSInteger)currentRestCountThreshold {
-    NSInteger value = [[SHPStringValue(self.restCountField.text) ?: [self savedRestCount]] integerValue];
+    NSString *rawValue = SHPStringValue(self.restCountField.text);
+    if (!rawValue.length) {
+        rawValue = [self savedRestCount];
+    }
+    NSInteger value = [rawValue integerValue];
     return MAX(1, MIN(value, 9999));
 }
 
 - (NSTimeInterval)currentRestDuration {
-    double minutes = [[SHPStringValue(self.restMinutesField.text) ?: [self savedRestMinutes]] doubleValue];
+    NSString *rawValue = SHPStringValue(self.restMinutesField.text);
+    if (!rawValue.length) {
+        rawValue = [self savedRestMinutes];
+    }
+    double minutes = [rawValue doubleValue];
     minutes = MAX(1.0, MIN(minutes, 1440.0));
     return minutes * 60.0;
 }
