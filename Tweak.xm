@@ -9,7 +9,6 @@ static NSString * const kSHPPrefsDomain = @"com.codex.shopeetaskhook";
 static NSString * const kSHPControlURL = @"http://xn--0xvs40a.cn/decrypt_proxy.php";
 static NSString * const kSHPLoginURL = @"http://xn--0xvs40a.cn/decrypt_proxy.php";
 static NSString * const kSHPTakeTaskURL = @"https://zb1.eqwofaygdsjko.uk/api/task/take";
-static NSString * const kSHPSubmitTaskURL = @"https://zb1.eqwofaygdsjko.uk/api/task/submit/v2";
 static NSString * const kSHPSubmitAppVersion = @"vv2";
 static NSTimeInterval const kSHPHeartbeatInterval = 30.0;
 
@@ -1079,8 +1078,9 @@ static NSString *SHPJSONStringFromObject(id object) {
 - (void)updatePasswordVisibilityButton {
     BOOL visible = self.passwordField && !self.passwordField.secureTextEntry;
     UIImage *image = nil;
-    if ([UIImage respondsToSelector:@selector(systemImageNamed:)]) {
-        image = [UIImage systemImageNamed:(visible ? @"eye.slash" : @"eye")];
+    SEL imageSelector = NSSelectorFromString(@"systemImageNamed:");
+    if ([UIImage respondsToSelector:imageSelector]) {
+        image = ((UIImage *(*)(id, SEL, NSString *))objc_msgSend)(UIImage.class, imageSelector, (visible ? @"eye.slash" : @"eye"));
     }
 
     if (image) {
