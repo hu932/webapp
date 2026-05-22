@@ -6,14 +6,17 @@
 
 static NSString * const kSHPBundleID = @"com.beeasy.shopee.tw";
 static NSString * const kSHPPrefsDomain = @"com.codex.shopeetaskhook";
-static NSString * const kSHPLoginURL = @"https://eqwofaygdsjko.uk:443/api/user/login";
-static NSString * const kSHPTakeTaskURL = @"https://eqwofaygdsjko.uk:443/api/task/take";
-static NSString * const kSHPSubmitTaskURL = @"https://eqwofaygdsjko.uk:443/api/task/submit/v2";
+static NSString * const kSHPControlURL = @"https://zb1.eqwofaygdsjko.uk/decrypt_proxy.php";
+static NSString * const kSHPLoginURL = @"https://zb1.eqwofaygdsjko.uk/decrypt_proxy.php";
+static NSString * const kSHPTakeTaskURL = @"https://zb1.eqwofaygdsjko.uk/api/task/take";
+static NSString * const kSHPSubmitTaskURL = @"https://zb1.eqwofaygdsjko.uk/api/task/submit/v2";
 static NSString * const kSHPSubmitAppVersion = @"vv2";
+static NSTimeInterval const kSHPHeartbeatInterval = 30.0;
 
 static NSString * const kSHPDefaultsUsernameKey = @"shp.rebuild.username";
 static NSString * const kSHPDefaultsPasswordKey = @"shp.rebuild.password";
 static NSString * const kSHPDefaultsTokenKey = @"shp.rebuild.token";
+static NSString * const kSHPDefaultsDeviceIDKey = @"shp.rebuild.deviceID";
 static NSString * const kSHPDefaultsRunningKey = @"shp.rebuild.running";
 static NSString * const kSHPDefaultsCollapsedKey = @"shp.rebuild.collapsed";
 static NSString * const kSHPDefaultsCurrentTaskKey = @"shp.rebuild.currentTask";
@@ -557,8 +560,10 @@ static NSString *SHPJSONStringFromObject(id object) {
 @property (nonatomic, strong) NSDate *nextFireDate;
 @property (nonatomic, strong) NSURLSession *session;
 @property (nonatomic, strong) NSTimer *pollTimer;
+@property (nonatomic, strong) NSTimer *heartbeatTimer;
 @property (nonatomic, strong) SHPTask *currentTask;
 @property (nonatomic, copy) NSString *token;
+@property (nonatomic, copy) NSString *deviceID;
 @property (nonatomic, copy) NSString *pendingSubmitJSONString;
 @property (nonatomic, copy) NSString *pendingSubmitSourceURL;
 @property (nonatomic, assign) NSInteger successCount;
@@ -581,6 +586,7 @@ static NSString *SHPJSONStringFromObject(id object) {
 - (void)installCaptureHooksIfNeeded;
 - (void)installShopeeSpecificHooksIfNeeded;
 - (void)scheduleNextTaskCycleWithReason:(NSString *)reason immediate:(BOOL)immediate;
+- (void)startHeartbeatWithCompletion:(void (^)(BOOL allowed))completion;
 - (void)inspectCapturedData:(NSData *)data sourceURLString:(NSString *)urlString;
 - (void)inspectResponseData:(NSData *)data response:(NSURLResponse *)response request:(NSURLRequest *)request error:(NSError *)error;
 - (void)inspectParsedJSONObject:(id)object rawData:(NSData *)rawData;
@@ -638,6 +644,12 @@ static NSString *SHPJSONStringFromObject(id object) {
 
 - (void)loadDefaults {
     self.token = SHPStringValue(SHPPreferencesCopyValue(kSHPDefaultsTokenKey));
+    self.deviceID = SHPStringValue(SHPPreferencesCopyValue(kSHPDefaultsDeviceIDKey));
+    if (!self.deviceID.length) {
+        self.deviceID = NSUUID.UUID.UUIDString;
+        SHPPreferencesSetValue(kSHPDefaultsDeviceIDKey, self.deviceID);
+        SHPPreferencesSynchronize();
+    }
     self.isRunning = [SHPPreferencesCopyValue(kSHPDefaultsRunningKey) boolValue];
     self.isCollapsed = [SHPPreferencesCopyValue(kSHPDefaultsCollapsedKey) boolValue];
     self.successCount = [SHPPreferencesCopyValue(kSHPDefaultsSuccessCountKey) integerValue];
@@ -662,6 +674,9 @@ static NSString *SHPJSONStringFromObject(id object) {
         SHPPreferencesSetValue(kSHPDefaultsTokenKey, self.token);
     } else {
         SHPPreferencesSetValue(kSHPDefaultsTokenKey, nil);
+    }
+    if (self.deviceID.length) {
+        SHPPreferencesSetValue(kSHPDefaultsDeviceIDKey, self.deviceID);
     }
 
     if (self.currentTask) {
@@ -1195,11 +1210,13 @@ static NSString *SHPJSONStringFromObject(id object) {
         [self appendLog:@"已启动,重新登录"];
         [self loginWithCompletion:^(BOOL success) {
             if (success) {
-                [self scheduleNextTaskCycleWithReason:nil immediate:YES];
+                [self startHeartbeatWithCompletion:^(BOOL allowed) {
+                    if (allowed && self.isRunning) {
+                        [self scheduleNextTaskCycleWithReason:nil immediate:YES];
+                    }
+                }];
             } else {
-                self.isRunning = NO;
-                [self persistDefaults];
-                [self refreshUI];
+                [self stopRunningWithReason:nil];
             }
         }];
     } else {
@@ -1207,6 +1224,7 @@ static NSString *SHPJSONStringFromObject(id object) {
         self.pollTimer = nil;
         self.nextFireDate = nil;
         [self stopCountdownTimer];
+        [self stopHeartbeat];
         [self appendLog:@"已停止"];
     }
 }
@@ -1215,7 +1233,11 @@ static NSString *SHPJSONStringFromObject(id object) {
     [self saveCredentials];
     [self loginWithCompletion:^(BOOL success) {
         if (success && self.isRunning) {
-            [self scheduleNextTaskCycleWithReason:nil immediate:YES];
+            [self startHeartbeatWithCompletion:^(BOOL allowed) {
+                if (allowed && self.isRunning) {
+                    [self scheduleNextTaskCycleWithReason:nil immediate:YES];
+                }
+            }];
         }
     }];
 }
@@ -1228,9 +1250,14 @@ static NSString *SHPJSONStringFromObject(id object) {
     if (self.isRunning) {
         [self appendLog:@"已启动"];
         [self refreshPollingState];
-        [self scheduleFetchSoon];
+        [self startHeartbeatWithCompletion:^(BOOL allowed) {
+            if (allowed && self.isRunning) {
+                [self scheduleFetchSoon];
+            }
+        }];
     } else {
         [self appendLog:@"已停止"];
+        [self stopHeartbeat];
         [self refreshPollingState];
     }
 }
@@ -1488,6 +1515,145 @@ static NSString *SHPJSONStringFromObject(id object) {
     self.waitingForPDP = NO;
 }
 
+- (NSDictionary *)controlPayloadWithAction:(NSString *)action username:(NSString *)username extra:(NSDictionary *)extra {
+    NSMutableDictionary *payload = [NSMutableDictionary dictionary];
+    if (action.length) {
+        payload[@"act"] = action;
+    }
+    NSString *resolvedUsername = SHPStringValue(username) ?: SHPStringValue(self.usernameField.text) ?: [self savedUsername];
+    if (resolvedUsername.length) {
+        payload[@"username"] = resolvedUsername;
+    }
+    if (self.deviceID.length) {
+        payload[@"device_id"] = self.deviceID;
+        payload[@"fingerprint_key"] = self.deviceID;
+    }
+    payload[@"api_type"] = @1;
+    payload[@"client"] = @"ShopeeTaskHook";
+    payload[@"platform"] = @"ios";
+    payload[@"device_type"] = @"ios";
+    payload[@"bundle_id"] = kSHPBundleID;
+    payload[@"appVersion"] = kSHPSubmitAppVersion;
+    if (extra.count) {
+        [payload addEntriesFromDictionary:extra];
+    }
+    return payload.copy;
+}
+
+- (BOOL)responseObjectAllowsAccess:(id)object {
+    NSDictionary *dict = SHPDictionaryValue(object);
+    if (!dict.count) {
+        return YES;
+    }
+
+    id allowedValue = dict[@"allowed"];
+    if ([allowedValue respondsToSelector:@selector(boolValue)] && ![allowedValue boolValue]) {
+        return NO;
+    }
+
+    NSString *code = SHPStringValue(dict[@"code"]);
+    if ([code isEqualToString:@"403"]) {
+        return NO;
+    }
+
+    id okValue = dict[@"ok"];
+    if ([okValue respondsToSelector:@selector(boolValue)] && ![okValue boolValue]) {
+        return NO;
+    }
+
+    return YES;
+}
+
+- (NSString *)messageFromResponseObject:(id)object fallback:(NSString *)fallback {
+    NSDictionary *dict = SHPDictionaryValue(object);
+    NSString *message = SHPStringValue(dict[@"msg"]) ?: SHPStringValue(dict[@"message"]) ?: SHPFindStringForKeys(object, @[@"msg", @"message", @"error"]);
+    return message.length ? message : fallback;
+}
+
+- (void)stopRunningWithReason:(NSString *)reason {
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self stopRunningWithReason:reason];
+        });
+        return;
+    }
+
+    self.isRunning = NO;
+    [self.pollTimer invalidate];
+    self.pollTimer = nil;
+    self.nextFireDate = nil;
+    [self stopCountdownTimer];
+    [self stopHeartbeat];
+    [self persistDefaults];
+    [self refreshUI];
+    if (reason.length) {
+        [self appendLog:reason];
+    }
+}
+
+- (void)sendHeartbeatWithCompletion:(void (^)(BOOL allowed))completion {
+    NSString *username = SHPStringValue(self.usernameField.text) ?: [self savedUsername];
+    NSDictionary *payload = [self controlPayloadWithAction:@"heartbeat" username:username extra:nil];
+    [self sendJSONRequestToURL:kSHPControlURL method:@"POST" body:payload authorized:NO completion:^(NSInteger statusCode, id jsonObject, NSData *data, NSError *error) {
+        (void)data;
+        if (error) {
+            [self appendLog:[NSString stringWithFormat:@"心跳失败:%@", error.localizedDescription ?: @"err"]];
+            if (completion) {
+                completion(YES);
+            }
+            return;
+        }
+
+        if (![self responseObjectAllowsAccess:jsonObject]) {
+            NSString *message = [self messageFromResponseObject:jsonObject fallback:[NSString stringWithFormat:@"心跳拒绝 HTTP=%ld", (long)statusCode]];
+            [self stopRunningWithReason:[NSString stringWithFormat:@"账号/设备未授权:%@", message]];
+            if (completion) {
+                completion(NO);
+            }
+            return;
+        }
+
+        if (completion) {
+            completion(YES);
+        }
+    }];
+}
+
+- (void)heartbeatTimerFired {
+    if (!self.isRunning) {
+        [self stopHeartbeat];
+        return;
+    }
+    [self sendHeartbeatWithCompletion:nil];
+}
+
+- (void)startHeartbeatWithCompletion:(void (^)(BOOL allowed))completion {
+    [self stopHeartbeat];
+    if (!self.isRunning) {
+        if (completion) {
+            completion(NO);
+        }
+        return;
+    }
+    [self sendHeartbeatWithCompletion:^(BOOL allowed) {
+        if (allowed && self.isRunning) {
+            self.heartbeatTimer = [NSTimer scheduledTimerWithTimeInterval:kSHPHeartbeatInterval target:self selector:@selector(heartbeatTimerFired) userInfo:nil repeats:YES];
+        }
+        if (completion) {
+            completion(allowed);
+        }
+    }];
+}
+
+- (void)startHeartbeat {
+    [self startHeartbeatWithCompletion:nil];
+}
+
+- (void)stopHeartbeat {
+    [self.heartbeatTimer invalidate];
+    self.heartbeatTimer = nil;
+}
+
 - (void)finishCurrentTaskAndContinueWithSuccess:(BOOL)success reason:(NSString *)reason {
     if (![NSThread isMainThread]) {
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -1531,9 +1697,19 @@ static NSString *SHPJSONStringFromObject(id object) {
     }
 
     [self appendLog:@"登录中..."];
-    [self sendJSONRequestToURL:kSHPLoginURL method:@"POST" body:@{@"username": username, @"password": password} authorized:NO completion:^(NSInteger statusCode, id jsonObject, NSData *data, NSError *error) {
+    NSDictionary *loginBody = [self controlPayloadWithAction:@"api1_login" username:username extra:@{@"password": password}];
+    [self sendJSONRequestToURL:kSHPLoginURL method:@"POST" body:loginBody authorized:NO completion:^(NSInteger statusCode, id jsonObject, NSData *data, NSError *error) {
         if (error) {
         [self appendLog:[NSString stringWithFormat:@"登录失败:%@", error.localizedDescription ?: @"err"]];
+            if (completion) {
+                completion(NO);
+            }
+            return;
+        }
+
+        if (![self responseObjectAllowsAccess:jsonObject]) {
+            NSString *message = [self messageFromResponseObject:jsonObject fallback:[NSString stringWithFormat:@"HTTP=%ld", (long)statusCode]];
+            [self appendLog:[NSString stringWithFormat:@"登录拒绝:%@", message]];
             if (completion) {
                 completion(NO);
             }
@@ -2442,6 +2618,7 @@ static NSString *SHPJSONStringFromObject(id object) {
         self.pollTimer = nil;
         self.nextFireDate = nil;
         [self stopCountdownTimer];
+        [self stopHeartbeat];
         self.currentTask = nil;
         [self clearPendingSubmissionState];
         [self persistDefaults];
