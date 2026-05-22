@@ -1,4 +1,4 @@
-#import <Foundation/Foundation.h>
+﻿#import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <objc/message.h>
 #import <objc/runtime.h>
@@ -1186,21 +1186,19 @@ static NSString *SHPJSONStringFromObject(id object) {
 
 - (void)refreshUI {
     dispatch_async(dispatch_get_main_queue(), ^{
-        [self layoutInterface];
-
         NSString *modeText = self.isRunning ? @"运行中" : @"已暂停";
         NSString *tokenText = self.token.length ? @"已登录" : @"未登录";
-        self.statusLabel.text = [NSString stringWithFormat:@"状态: %@ | %@", tokenText, modeText];
+        self.statusLabel.text = [NSString stringWithFormat:@"状态：%@｜%@", tokenText, modeText];
 
         if (self.currentTask.itemID.length && self.currentTask.shopID.length) {
-            self.taskLabel.text = [NSString stringWithFormat:@"当前任务: shop=%@  item=%@", self.currentTask.shopID, self.currentTask.itemID];
+            self.taskLabel.text = [NSString stringWithFormat:@"当前任务：shop=%@  item=%@", self.currentTask.shopID, self.currentTask.itemID];
         } else if (self.currentTask.traceID.length) {
-            self.taskLabel.text = [NSString stringWithFormat:@"当前任务: %@", self.currentTask.traceID];
+            self.taskLabel.text = [NSString stringWithFormat:@"当前任务：%@", self.currentTask.traceID];
         } else {
-            self.taskLabel.text = @"当前任务: 暂无";
+            self.taskLabel.text = @"当前任务：暂无";
         }
 
-        self.counterLabel.text = [NSString stringWithFormat:@"本地成功上传: %ld", (long)self.successCount];
+        self.counterLabel.text = [NSString stringWithFormat:@"本地成功上传：%ld", (long)self.successCount];
         [self.startTaskButton setTitle:(self.isRunning ? @"停止任务" : @"启动任务") forState:UIControlStateNormal];
         self.startTaskButton.backgroundColor = self.isRunning ? [UIColor colorWithRed:0.80 green:0.34 blue:0.22 alpha:1.0] : [UIColor colorWithRed:0.19 green:0.44 blue:0.78 alpha:1.0];
 
@@ -1222,7 +1220,6 @@ static NSString *SHPJSONStringFromObject(id object) {
         NSString *restTitle = self.isRestModeEnabled ? @"任务休息：开" : @"任务休息：关";
         [self.restModeButton setTitle:restTitle forState:UIControlStateNormal];
         [self.restModeButton setTitleColor:(self.isRestModeEnabled ? [UIColor colorWithRed:0.46 green:0.89 blue:0.86 alpha:1.0] : [UIColor colorWithRed:0.55 green:0.62 blue:0.70 alpha:1.0]) forState:UIControlStateNormal];
-
         [self updateMiniViewContent];
     });
 }
@@ -2652,44 +2649,16 @@ static NSString *SHPJSONStringFromObject(id object) {
     self.pendingSubmitJSONString = [jsonString copy];
     self.pendingSubmitSourceURL = [submitURL copy];
 
-    NSString *username = SHPStringValue(self.usernameField.text) ?: [self savedUsername] ?: @"";
     NSMutableDictionary *body = [NSMutableDictionary dictionary];
     [body setObject:@"api1_submit" forKey:@"act"];
     [body setObject:kSHPSubmitAppVersion forKey:@"appVersion"];
     [body setObject:(submitURL ?: @"") forKey:@"url"];
     [body setObject:jsonString forKey:@"result"];
-    if (username.length) {
-        [body setObject:username forKey:@"username"];
+    if (self.token.length) {
+        [body setObject:self.token forKey:@"auth_token"];
     }
-        if (self.deviceID.length) {
-            [body setObject:self.deviceID forKey:@"device_id"];
-            [body setObject:self.deviceID forKey:@"fingerprint_key"];
-        }
-        if (self.token.length) {
-            [body setObject:self.token forKey:@"auth_token"];
-        }
-        NSString *submitID = [NSUUID UUID].UUIDString;
-        [body setObject:submitID forKey:@"submit_id"];
-        if (self.currentTask.traceID.length) {
-            [body setObject:self.currentTask.traceID forKey:@"task_id"];
-            [body setObject:self.currentTask.traceID forKey:@"trace_id"];
-        }
-        if (self.currentTask.itemID.length) {
-            [body setObject:self.currentTask.itemID forKey:@"item_id"];
-            [body setObject:self.currentTask.itemID forKey:@"itemId"];
-        }
-        if (self.currentTask.shopID.length) {
-            [body setObject:self.currentTask.shopID forKey:@"shop_id"];
-            [body setObject:self.currentTask.shopID forKey:@"shopId"];
-        }
-        if (self.currentTask.productURL.length) {
-            [body setObject:self.currentTask.productURL forKey:@"product_url"];
-        }
-        if (self.currentTask.pdpURL.length) {
-            [body setObject:self.currentTask.pdpURL forKey:@"pdp_url"];
-        }
 
-        [self appendLog:@"提交中..."];
+    [self appendLog:@"提交中..."];
     [self sendJSONRequestToURL:kSHPControlURL method:@"POST" body:body authorized:YES completion:^(NSInteger statusCode, id jsonObject, NSData *data, NSError *error) {
         if (error) {
             [self appendLog:[NSString stringWithFormat:@"提交失败:%@", error.localizedDescription ?: @"未知"]];
@@ -2718,22 +2687,9 @@ static NSString *SHPJSONStringFromObject(id object) {
         NSString *rootCode = SHPStringValue(respDict[@"code"]);
         NSString *dataCode = SHPStringValue(respData[@"code"]);
         NSString *respMsg = SHPStringValue(respData[@"msg"]) ?: SHPStringValue(respDict[@"msg"]) ?: SHPStringValue(respDict[@"message"]);
-        NSString *respSubmitID = SHPStringValue(respData[@"submit_id"]) ?: SHPStringValue(respDict[@"submit_id"]);
-        NSString *respTaskID = SHPStringValue(respData[@"task_id"]) ?: SHPStringValue(respDict[@"task_id"]);
 
         if (![rootCode isEqualToString:@"200"] || ![dataCode isEqualToString:@"SUCCESS"]) {
             [self appendLog:[NSString stringWithFormat:@"提交业务失败 code=%@ data.code=%@ msg=%@", rootCode ?: @"<nil>", dataCode ?: @"<nil>", respMsg ?: @"<nil>"]];
-            [self finishCurrentTaskAndContinueWithSuccess:NO reason:nil];
-            return;
-        }
-
-        if (respSubmitID.length && ![respSubmitID isEqualToString:submitID]) {
-            [self appendLog:@"提交响应与当前提交不匹配"];
-            [self finishCurrentTaskAndContinueWithSuccess:NO reason:nil];
-            return;
-        }
-        if (self.currentTask.traceID.length && respTaskID.length && ![respTaskID isEqualToString:self.currentTask.traceID]) {
-            [self appendLog:@"提交响应与当前任务不匹配"];
             [self finishCurrentTaskAndContinueWithSuccess:NO reason:nil];
             return;
         }
