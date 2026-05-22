@@ -96,4 +96,20 @@ jobs:
 
       - name: Fail workflow if any build failed
         if: steps.build_rootless.outcome != 'success' || steps.build_rootful.outcome != 'success'
-        run: exit 1
+        shell: bash
+        run: |
+          echo "Rootless outcome: ${{ steps.build_rootless.outcome }}"
+          echo "Rootful outcome: ${{ steps.build_rootful.outcome }}"
+          echo
+          echo "==== rootless errors ===="
+          grep -n -i -E "error:|fatal error:|undefined symbols|ld:|make\\[[0-9]+\\]: \\*\\*\\*" build-rootless.log | tail -n 80 || true
+          echo
+          echo "==== rootless log tail ===="
+          tail -n 120 build-rootless.log || true
+          echo
+          echo "==== rootful errors ===="
+          grep -n -i -E "error:|fatal error:|undefined symbols|ld:|make\\[[0-9]+\\]: \\*\\*\\*" build-rootful.log | tail -n 80 || true
+          echo
+          echo "==== rootful log tail ===="
+          tail -n 120 build-rootful.log || true
+          exit 1
