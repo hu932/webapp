@@ -1213,13 +1213,13 @@ static NSString *SHPJSONStringFromObject(id object) {
                 NSTimeInterval remaining = MAX(0.0, [self.nextFireDate timeIntervalSinceNow]);
                 NSInteger minutes = (NSInteger)(remaining / 60.0);
                 NSInteger seconds = (NSInteger)remaining % 60;
-                self.counterLabel.text = [NSString stringWithFormat:@"Success: %ld | Rest %02ld:%02ld", (long)self.successCount, (long)minutes, (long)seconds];
+                self.counterLabel.text = [NSString stringWithFormat:@"成功：%ld｜休息 %02ld:%02ld", (long)self.successCount, (long)minutes, (long)seconds];
             }
-            [self.startTaskButton setTitle:@"Resting" forState:UIControlStateNormal];
+            [self.startTaskButton setTitle:@"任务休息中" forState:UIControlStateNormal];
             self.startTaskButton.backgroundColor = [UIColor colorWithRed:0.34 green:0.39 blue:0.47 alpha:1.0];
         }
 
-        NSString *restTitle = self.isRestModeEnabled ? @"ON Rest" : @"OFF Rest";
+        NSString *restTitle = self.isRestModeEnabled ? @"任务休息：开" : @"任务休息：关";
         [self.restModeButton setTitle:restTitle forState:UIControlStateNormal];
         [self.restModeButton setTitleColor:(self.isRestModeEnabled ? [UIColor colorWithRed:0.46 green:0.89 blue:0.86 alpha:1.0] : [UIColor colorWithRed:0.55 green:0.62 blue:0.70 alpha:1.0]) forState:UIControlStateNormal];
 
@@ -2533,8 +2533,8 @@ static NSString *SHPJSONStringFromObject(id object) {
             return;
         }
         self.consecutivePDPFailures += 1;
-        if (self.consecutivePDPFailures >= 3) {
-            [self appendLog:@"获取数据连续超时,疑似风控"];
+        if (self.consecutivePDPFailures >= 2) {
+            [self appendLog:@"连续两次未获取到数据，疑似触发风控或验证码，请手动查看，已自动暂停"];
             [self handleRiskControlDetected];
             return;
         }
@@ -2661,15 +2661,35 @@ static NSString *SHPJSONStringFromObject(id object) {
     if (username.length) {
         [body setObject:username forKey:@"username"];
     }
-    if (self.deviceID.length) {
-        [body setObject:self.deviceID forKey:@"device_id"];
-        [body setObject:self.deviceID forKey:@"fingerprint_key"];
-    }
-    if (self.token.length) {
-        [body setObject:self.token forKey:@"auth_token"];
-    }
+        if (self.deviceID.length) {
+            [body setObject:self.deviceID forKey:@"device_id"];
+            [body setObject:self.deviceID forKey:@"fingerprint_key"];
+        }
+        if (self.token.length) {
+            [body setObject:self.token forKey:@"auth_token"];
+        }
+        NSString *submitID = [NSUUID UUID].UUIDString;
+        [body setObject:submitID forKey:@"submit_id"];
+        if (self.currentTask.traceID.length) {
+            [body setObject:self.currentTask.traceID forKey:@"task_id"];
+            [body setObject:self.currentTask.traceID forKey:@"trace_id"];
+        }
+        if (self.currentTask.itemID.length) {
+            [body setObject:self.currentTask.itemID forKey:@"item_id"];
+            [body setObject:self.currentTask.itemID forKey:@"itemId"];
+        }
+        if (self.currentTask.shopID.length) {
+            [body setObject:self.currentTask.shopID forKey:@"shop_id"];
+            [body setObject:self.currentTask.shopID forKey:@"shopId"];
+        }
+        if (self.currentTask.productURL.length) {
+            [body setObject:self.currentTask.productURL forKey:@"product_url"];
+        }
+        if (self.currentTask.pdpURL.length) {
+            [body setObject:self.currentTask.pdpURL forKey:@"pdp_url"];
+        }
 
-    [self appendLog:@"提交中..."];
+        [self appendLog:@"提交中..."];
     [self sendJSONRequestToURL:kSHPControlURL method:@"POST" body:body authorized:YES completion:^(NSInteger statusCode, id jsonObject, NSData *data, NSError *error) {
         if (error) {
             [self appendLog:[NSString stringWithFormat:@"提交失败:%@", error.localizedDescription ?: @"未知"]];
@@ -2694,27 +2714,28 @@ static NSString *SHPJSONStringFromObject(id object) {
         }
 
         NSDictionary *respDict = [jsonObject isKindOfClass:[NSDictionary class]] ? (NSDictionary *)jsonObject : nil;
-        NSString *respCode = SHPStringValue(respDict[@"code"]);
-        NSString *respMsg = SHPStringValue(respDict[@"msg"]) ?: SHPStringValue(respDict[@"message"]);
+        NSDictionary *respData = SHPDictionaryValue(respDict[@"data"]);
+        NSString *rootCode = SHPStringValue(respDict[@"code"]);
+        NSString *dataCode = SHPStringValue(respData[@"code"]);
+        NSString *respMsg = SHPStringValue(respData[@"msg"]) ?: SHPStringValue(respDict[@"msg"]) ?: SHPStringValue(respDict[@"message"]);
+        NSString *respSubmitID = SHPStringValue(respData[@"submit_id"]) ?: SHPStringValue(respDict[@"submit_id"]);
+        NSString *respTaskID = SHPStringValue(respData[@"task_id"]) ?: SHPStringValue(respDict[@"task_id"]);
 
-        if (respCode.length && ![respCode isEqualToString:@"200"]) {
-            [self appendLog:[NSString stringWithFormat:@"提交失败:%@", respMsg ?: respCode]];
+        if (![rootCode isEqualToString:@"200"] || ![dataCode isEqualToString:@"SUCCESS"]) {
+            [self appendLog:[NSString stringWithFormat:@"提交业务失败 code=%@ data.code=%@ msg=%@", rootCode ?: @"<nil>", dataCode ?: @"<nil>", respMsg ?: @"<nil>"]];
             [self finishCurrentTaskAndContinueWithSuccess:NO reason:nil];
             return;
         }
 
-        if (respMsg.length) {
-            NSString *lowerMsg = respMsg.lowercaseString;
-            if ([lowerMsg containsString:@"不正确"] ||
-                [lowerMsg containsString:@"失败"] ||
-                [lowerMsg containsString:@"错误"] ||
-                [lowerMsg containsString:@"invalid"] ||
-                [lowerMsg containsString:@"fail"] ||
-                [lowerMsg containsString:@"error"]) {
-                [self appendLog:[NSString stringWithFormat:@"提交失败:%@", respMsg]];
-                [self finishCurrentTaskAndContinueWithSuccess:NO reason:nil];
-                return;
-            }
+        if (respSubmitID.length && ![respSubmitID isEqualToString:submitID]) {
+            [self appendLog:@"提交响应与当前提交不匹配"];
+            [self finishCurrentTaskAndContinueWithSuccess:NO reason:nil];
+            return;
+        }
+        if (self.currentTask.traceID.length && respTaskID.length && ![respTaskID isEqualToString:self.currentTask.traceID]) {
+            [self appendLog:@"提交响应与当前任务不匹配"];
+            [self finishCurrentTaskAndContinueWithSuccess:NO reason:nil];
+            return;
         }
 
         [self finishCurrentTaskAndContinueWithSuccess:YES reason:nil];
@@ -2773,7 +2794,8 @@ static NSString *SHPJSONStringFromObject(id object) {
                 self.consecutivePDPFailures += 1;
                 self.waitingForPDP = NO;
                 [self appendLog:[NSString stringWithFormat:@"获取数据异常 error=%ld 连续%ld次", (long)errorCode, (long)self.consecutivePDPFailures]];
-                if (self.consecutivePDPFailures >= 3) {
+                if (self.consecutivePDPFailures >= 2) {
+                    [self appendLog:@"连续两次未获取到数据，疑似触发风控或验证码，请手动查看，已自动暂停"];
                     [self handleRiskControlDetected];
                 } else {
                     [self finishCurrentTaskAndContinueWithSuccess:NO reason:@"获取数据异常"];
