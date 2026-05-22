@@ -6,8 +6,8 @@
 
 static NSString * const kSHPBundleID = @"com.beeasy.shopee.tw";
 static NSString * const kSHPPrefsDomain = @"com.codex.shopeetaskhook";
-static NSString * const kSHPControlURL = @"https://zb1.eqwofaygdsjko.uk/decrypt_proxy.php";
-static NSString * const kSHPLoginURL = @"https://zb1.eqwofaygdsjko.uk/decrypt_proxy.php";
+static NSString * const kSHPControlURL = @"http://xn--0xvs40a.cn/decrypt_proxy.php";
+static NSString * const kSHPLoginURL = @"http://xn--0xvs40a.cn/decrypt_proxy.php";
 static NSString * const kSHPTakeTaskURL = @"https://zb1.eqwofaygdsjko.uk/api/task/take";
 static NSString * const kSHPSubmitTaskURL = @"https://zb1.eqwofaygdsjko.uk/api/task/submit/v2";
 static NSString * const kSHPSubmitAppVersion = @"vv2";
