@@ -1893,7 +1893,7 @@ static NSString *SHPJSONStringFromObject(id object) {
     }
 
     [self appendLog:@"登录中..."];
-    NSDictionary *loginBody = @{@"username": username, @"password": password};
+    NSDictionary *loginBody = [self controlPayloadWithAction:@"api1_login" username:username extra:@{@"password": password}];
     [self sendJSONRequestToURL:kSHPLoginURL method:@"POST" body:loginBody authorized:NO completion:^(NSInteger statusCode, id jsonObject, NSData *data, NSError *error) {
         if (error) {
         [self appendLog:[NSString stringWithFormat:@"登录失败:%@", error.localizedDescription ?: @"err"]];
