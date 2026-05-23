@@ -1238,6 +1238,7 @@ static NSString *SHPJSONStringFromObject(id object) {
         [self.restModeButton setTitle:restTitle forState:UIControlStateNormal];
         [self.restModeButton setTitleColor:(self.isRestModeEnabled ? [UIColor colorWithRed:0.46 green:0.89 blue:0.86 alpha:1.0] : [UIColor colorWithRed:0.55 green:0.62 blue:0.70 alpha:1.0]) forState:UIControlStateNormal];
         [self updateMiniViewContent];
+        [self layoutInterface];
     });
 }
 
@@ -1301,6 +1302,7 @@ static NSString *SHPJSONStringFromObject(id object) {
 - (void)toggleCollapsed {
     self.isCollapsed = !self.isCollapsed;
     [self persistDefaults];
+    [self layoutInterface];
     [self refreshUI];
 }
 
@@ -1498,6 +1500,7 @@ static NSString *SHPJSONStringFromObject(id object) {
 - (void)miniViewTapped {
     self.isCollapsed = NO;
     [self persistDefaults];
+    [self layoutInterface];
     [self refreshUI];
 }
 
