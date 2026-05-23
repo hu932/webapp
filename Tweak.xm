@@ -540,7 +540,7 @@ static NSString *SHPJSONStringFromObject(id object) {
 
 @end
 
-@interface SHPPluginController : NSObject <UITextFieldDelegate>
+@interface SHPPluginController : NSObject <UITextFieldDelegate, UIGestureRecognizerDelegate>
 @property (nonatomic, strong) SHPPassthroughWindow *overlayWindow;
 @property (nonatomic, strong) UIView *panelView;
 @property (nonatomic, strong) UIView *headerView;
@@ -1020,9 +1020,16 @@ static NSString *SHPJSONStringFromObject(id object) {
     [containerView addSubview:self.riskControlLabel];
 
     UIPanGestureRecognizer *panelPan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handlePanelPan:)];
+    panelPan.delegate = self;
+    panelPan.cancelsTouchesInView = NO;
+    panelPan.delaysTouchesBegan = NO;
+    panelPan.delaysTouchesEnded = NO;
     [self.headerView addGestureRecognizer:panelPan];
 
     UIPanGestureRecognizer *bubblePan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handleBubblePan:)];
+    bubblePan.cancelsTouchesInView = NO;
+    bubblePan.delaysTouchesBegan = NO;
+    bubblePan.delaysTouchesEnded = NO;
     [self.bubbleButton addGestureRecognizer:bubblePan];
 
     self.resizeHandle = [[UIView alloc] initWithFrame:CGRectZero];
@@ -1031,6 +1038,9 @@ static NSString *SHPJSONStringFromObject(id object) {
     [self.panelView addSubview:self.resizeHandle];
 
     UIPanGestureRecognizer *resizePan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handleResizePan:)];
+    resizePan.cancelsTouchesInView = NO;
+    resizePan.delaysTouchesBegan = NO;
+    resizePan.delaysTouchesEnded = NO;
     [self.resizeHandle addGestureRecognizer:resizePan];
 }
 
@@ -1083,8 +1093,15 @@ static NSString *SHPJSONStringFromObject(id object) {
 - (void)updatePasswordVisibilityButton {
     BOOL visible = self.passwordField && !self.passwordField.secureTextEntry;
     [self.passwordVisibilityButton setImage:nil forState:UIControlStateNormal];
-    [self.passwordVisibilityButton setTitle:(visible ? @"Hide" : @"Show") forState:UIControlStateNormal];
-    self.passwordVisibilityButton.accessibilityLabel = visible ? @"Hide password" : @"Show password";
+    [self.passwordVisibilityButton setTitle:(visible ? @"隐藏" : @"显示") forState:UIControlStateNormal];
+    self.passwordVisibilityButton.accessibilityLabel = visible ? @"隐藏密码" : @"显示密码";
+}
+
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldReceiveTouch:(UITouch *)touch {
+    if (gestureRecognizer.view == self.headerView && (touch.view == self.collapseButton || [touch.view isDescendantOfView:self.collapseButton])) {
+        return NO;
+    }
+    return YES;
 }
 
 - (UIButton *)makeButtonWithTitle:(NSString *)title color:(UIColor *)color {
@@ -1471,7 +1488,7 @@ static NSString *SHPJSONStringFromObject(id object) {
         self.nextFireDate = nil;
         [self stopCountdownTimer];
         if (self.isRunning) {
-            [self scheduleNextTaskCycleWithReason:@"Rest disabled" immediate:YES];
+            [self scheduleNextTaskCycleWithReason:@"任务休息已关闭" immediate:YES];
         }
     }
     [self persistDefaults];

@@ -17,6 +17,7 @@ $APK_DIR = __DIR__ . '/app_updates';
 $STATS_DIR = __DIR__ . '/daily_stats';
 $FP_ENV_STATS_DIR = __DIR__ . '/fingerprint_env_stats';
 $API1_TOKEN_FILE = __DIR__ . '/api1_token.json';
+$API1_TOKEN_MAP_FILE = __DIR__ . '/api1_token_map.json';
 $API1_ACCOUNTS_FILE = __DIR__ . '/api1_allowed_accounts.json';
 $API2_ACCOUNTS_FILE = __DIR__ . '/api2_allowed_accounts.json';
 $API2_NUMBERS_FILE = __DIR__ . '/api2_number_remarks.json';
@@ -205,8 +206,63 @@ function getApi1Token(array $auth, string $tokenFile, bool $forceRefresh = false
         'expires_at' => $expiresAt,
         'updated_at' => date('Y-m-d H:i:s'),
     ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), LOCK_EX);
+    cacheApi1TokenUsername($token, (string)($auth['username'] ?? ''), $expiresAt);
 
     return ['ok' => true, 'token' => $token, 'cached' => false, 'expires_at' => $expiresAt];
+}
+
+function loadApi1TokenMap(string $file): array {
+    if (!is_file($file)) return [];
+    $data = json_decode((string)@file_get_contents($file), true);
+    return is_array($data) ? $data : [];
+}
+
+function cacheApi1TokenUsername(string $token, string $username, int $expiresAt = 0): void {
+    global $API1_TOKEN_MAP_FILE;
+    $token = trim($token);
+    $username = trim($username);
+    if ($token === '' || $username === '') return;
+
+    $map = loadApi1TokenMap($API1_TOKEN_MAP_FILE);
+    $now = time();
+    foreach ($map as $key => $entry) {
+        if (!is_array($entry)) {
+            unset($map[$key]);
+            continue;
+        }
+        $entryExpiresAt = (int)($entry['expires_at'] ?? 0);
+        if ($entryExpiresAt > 0 && ($entryExpiresAt + 300) < $now) {
+            unset($map[$key]);
+        }
+    }
+
+    $map[md5($token)] = [
+        'username' => $username,
+        'expires_at' => $expiresAt,
+        'updated_at' => date('Y-m-d H:i:s'),
+    ];
+    if (count($map) > 100) {
+        $map = array_slice($map, -100, null, true);
+    }
+
+    atomicWrite($API1_TOKEN_MAP_FILE, json_encode($map, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+}
+
+function resolveApi1UsernameFromToken(string $token): string {
+    global $API1_TOKEN_MAP_FILE;
+    $token = trim($token);
+    if ($token === '') return '';
+
+    $map = loadApi1TokenMap($API1_TOKEN_MAP_FILE);
+    $entry = $map[md5($token)] ?? null;
+    if (!is_array($entry)) return '';
+
+    $expiresAt = (int)($entry['expires_at'] ?? 0);
+    if ($expiresAt > 0 && ($expiresAt + 300) < time()) {
+        return '';
+    }
+
+    return trim((string)($entry['username'] ?? ''));
 }
 
 function readApi1AllowedAccounts(string $file): array {
@@ -1219,6 +1275,11 @@ if ($postAct === 'api1_login') {
     if (!empty($loginResult['error'])) {
         jsonResp(['code' => '500', 'data' => null, 'msg' => '登录转发失败: ' . $loginResult['error']]);
     }
+    $loginJson = json_decode((string)$loginResult['response'], true);
+    $loginToken = is_array($loginJson) ? trim((string)($loginJson['data']['token'] ?? '')) : '';
+    if ($loginToken !== '') {
+        cacheApi1TokenUsername($loginToken, $username, jwtExp($loginToken));
+    }
     header('Content-Type: application/json; charset=utf-8');
     echo (string)$loginResult['response'];
     exit;
@@ -1271,6 +1332,9 @@ if ($postAct === 'api1_submit') {
         if (stripos($authHeader, 'Bearer ') === 0) {
             $submitToken = trim(substr($authHeader, 7));
         }
+    }
+    if ($username === '' && $submitToken !== '') {
+        $username = resolveApi1UsernameFromToken($submitToken);
     }
 
     if ($submitUrl === '' || $submitResult === '') {
