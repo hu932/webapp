@@ -3,18 +3,23 @@
 #import <objc/message.h>
 #import <objc/runtime.h>
 #import <substrate.h>
+#import <zlib.h>
 
 static NSString * const kSHPBundleID = @"com.beeasy.shopee.tw";
 static NSString * const kSHPPrefsDomain = @"com.codex.shopeetaskhook";
 static NSString * const kSHPControlURL = @"http://xn--0xvs40a.cn/decrypt_proxy.php";
 static NSString * const kSHPLoginURL = @"http://xn--0xvs40a.cn/decrypt_proxy.php";
 static NSString * const kSHPTakeTaskURL = @"https://zb1.eqwofaygdsjko.uk/api/task/take";
+static NSString * const kSHPApi2TakeTaskURL = @"http://103.143.80.158:2000/get";
+static NSString * const kSHPApi2FixedUsername = @"\u7c73\u4e50\u7c73\u4e50";
 static NSString * const kSHPSubmitAppVersion = @"vv2";
 static NSTimeInterval const kSHPHeartbeatInterval = 30.0;
 
 static NSString * const kSHPDefaultsUsernameKey = @"shp.rebuild.username";
 static NSString * const kSHPDefaultsPasswordKey = @"shp.rebuild.password";
 static NSString * const kSHPDefaultsTokenKey = @"shp.rebuild.token";
+static NSString * const kSHPDefaultsGroupIDKey = @"shp.rebuild.groupID";
+static NSString * const kSHPDefaultsApiTypeKey = @"shp.rebuild.apiType";
 static NSString * const kSHPDefaultsDeviceIDKey = @"shp.rebuild.deviceID";
 static NSString * const kSHPDefaultsRunningKey = @"shp.rebuild.running";
 static NSString * const kSHPDefaultsCollapsedKey = @"shp.rebuild.collapsed";
@@ -434,6 +439,40 @@ static NSString *SHPJSONStringFromObject(id object) {
     return [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
 }
 
+static NSData *SHPGzipData(NSData *data) {
+    if (!data.length) {
+        return nil;
+    }
+
+    z_stream stream;
+    memset(&stream, 0, sizeof(stream));
+    if (deflateInit2(&stream, Z_DEFAULT_COMPRESSION, Z_DEFLATED, 15 + 16, 8, Z_DEFAULT_STRATEGY) != Z_OK) {
+        return nil;
+    }
+
+    NSMutableData *compressed = [NSMutableData dataWithLength:MAX((NSUInteger)16384, data.length / 2)];
+    stream.next_in = (Bytef *)data.bytes;
+    stream.avail_in = (uInt)data.length;
+
+    int status = Z_OK;
+    do {
+        if (stream.total_out >= compressed.length) {
+            [compressed increaseLengthBy:16384];
+        }
+        stream.next_out = (Bytef *)compressed.mutableBytes + stream.total_out;
+        stream.avail_out = (uInt)(compressed.length - stream.total_out);
+        status = deflate(&stream, Z_FINISH);
+    } while (status == Z_OK);
+
+    deflateEnd(&stream);
+    if (status != Z_STREAM_END) {
+        return nil;
+    }
+
+    compressed.length = stream.total_out;
+    return compressed.copy;
+}
+
 @interface SHPPassthroughWindow : UIWindow
 @end
 
@@ -540,7 +579,7 @@ static NSString *SHPJSONStringFromObject(id object) {
 
 @end
 
-@interface SHPPluginController : NSObject <UITextFieldDelegate, UIGestureRecognizerDelegate>
+@interface SHPPluginController : NSObject <UITextFieldDelegate>
 @property (nonatomic, strong) SHPPassthroughWindow *overlayWindow;
 @property (nonatomic, strong) UIView *panelView;
 @property (nonatomic, strong) UIView *headerView;
@@ -570,6 +609,7 @@ static NSString *SHPJSONStringFromObject(id object) {
 @property (nonatomic, strong) NSTimer *heartbeatTimer;
 @property (nonatomic, strong) SHPTask *currentTask;
 @property (nonatomic, copy) NSString *token;
+@property (nonatomic, copy) NSString *groupID;
 @property (nonatomic, copy) NSString *deviceID;
 @property (nonatomic, copy) NSString *pendingSubmitJSONString;
 @property (nonatomic, copy) NSString *pendingSubmitSourceURL;
@@ -587,6 +627,7 @@ static NSString *SHPJSONStringFromObject(id object) {
 @property (nonatomic, strong) UILabel *riskControlLabel;
 @property (nonatomic, assign) BOOL isRiskControlled;
 @property (nonatomic, assign) NSInteger consecutivePDPFailures;
+@property (nonatomic, assign) NSInteger apiType;
 @property (nonatomic, assign) CGPoint panelOrigin;
 @property (nonatomic, assign) CGPoint bubbleOrigin;
 @property (nonatomic, assign) CGPoint miniOrigin;
@@ -600,6 +641,8 @@ static NSString *SHPJSONStringFromObject(id object) {
 - (void)inspectCapturedData:(NSData *)data sourceURLString:(NSString *)urlString;
 - (void)inspectResponseData:(NSData *)data response:(NSURLResponse *)response request:(NSURLRequest *)request error:(NSError *)error;
 - (void)inspectParsedJSONObject:(id)object rawData:(NSData *)rawData;
+- (BOOL)handleNoDataCaptureWithMessage:(NSString *)message currentItemID:(NSString *)currentItemID;
+- (void)handleRiskControlDetectedWithMessage:(NSString *)message;
 @end
 
 @implementation SHPPluginController
@@ -654,6 +697,11 @@ static NSString *SHPJSONStringFromObject(id object) {
 
 - (void)loadDefaults {
     self.token = SHPStringValue(SHPPreferencesCopyValue(kSHPDefaultsTokenKey));
+    self.groupID = SHPStringValue(SHPPreferencesCopyValue(kSHPDefaultsGroupIDKey));
+    self.apiType = [SHPPreferencesCopyValue(kSHPDefaultsApiTypeKey) integerValue];
+    if (self.apiType != 2) {
+        self.apiType = 1;
+    }
     self.deviceID = SHPStringValue(SHPPreferencesCopyValue(kSHPDefaultsDeviceIDKey));
     if (!self.deviceID.length) {
         self.deviceID = NSUUID.UUID.UUIDString;
@@ -695,6 +743,12 @@ static NSString *SHPJSONStringFromObject(id object) {
     } else {
         SHPPreferencesSetValue(kSHPDefaultsTokenKey, nil);
     }
+    if (self.groupID.length) {
+        SHPPreferencesSetValue(kSHPDefaultsGroupIDKey, self.groupID);
+    } else {
+        SHPPreferencesSetValue(kSHPDefaultsGroupIDKey, nil);
+    }
+    SHPPreferencesSetValue(kSHPDefaultsApiTypeKey, @(self.apiType > 0 ? self.apiType : 1));
     if (self.deviceID.length) {
         SHPPreferencesSetValue(kSHPDefaultsDeviceIDKey, self.deviceID);
     }
@@ -1020,16 +1074,9 @@ static NSString *SHPJSONStringFromObject(id object) {
     [containerView addSubview:self.riskControlLabel];
 
     UIPanGestureRecognizer *panelPan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handlePanelPan:)];
-    panelPan.delegate = self;
-    panelPan.cancelsTouchesInView = NO;
-    panelPan.delaysTouchesBegan = NO;
-    panelPan.delaysTouchesEnded = NO;
     [self.headerView addGestureRecognizer:panelPan];
 
     UIPanGestureRecognizer *bubblePan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handleBubblePan:)];
-    bubblePan.cancelsTouchesInView = NO;
-    bubblePan.delaysTouchesBegan = NO;
-    bubblePan.delaysTouchesEnded = NO;
     [self.bubbleButton addGestureRecognizer:bubblePan];
 
     self.resizeHandle = [[UIView alloc] initWithFrame:CGRectZero];
@@ -1038,9 +1085,6 @@ static NSString *SHPJSONStringFromObject(id object) {
     [self.panelView addSubview:self.resizeHandle];
 
     UIPanGestureRecognizer *resizePan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handleResizePan:)];
-    resizePan.cancelsTouchesInView = NO;
-    resizePan.delaysTouchesBegan = NO;
-    resizePan.delaysTouchesEnded = NO;
     [self.resizeHandle addGestureRecognizer:resizePan];
 }
 
@@ -1093,15 +1137,8 @@ static NSString *SHPJSONStringFromObject(id object) {
 - (void)updatePasswordVisibilityButton {
     BOOL visible = self.passwordField && !self.passwordField.secureTextEntry;
     [self.passwordVisibilityButton setImage:nil forState:UIControlStateNormal];
-    [self.passwordVisibilityButton setTitle:(visible ? @"隐藏" : @"显示") forState:UIControlStateNormal];
-    self.passwordVisibilityButton.accessibilityLabel = visible ? @"隐藏密码" : @"显示密码";
-}
-
-- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldReceiveTouch:(UITouch *)touch {
-    if (gestureRecognizer.view == self.headerView && (touch.view == self.collapseButton || [touch.view isDescendantOfView:self.collapseButton])) {
-        return NO;
-    }
-    return YES;
+    [self.passwordVisibilityButton setTitle:(visible ? @"Hide" : @"Show") forState:UIControlStateNormal];
+    self.passwordVisibilityButton.accessibilityLabel = visible ? @"Hide password" : @"Show password";
 }
 
 - (UIButton *)makeButtonWithTitle:(NSString *)title color:(UIColor *)color {
@@ -1203,19 +1240,21 @@ static NSString *SHPJSONStringFromObject(id object) {
 
 - (void)refreshUI {
     dispatch_async(dispatch_get_main_queue(), ^{
+        [self layoutInterface];
+
         NSString *modeText = self.isRunning ? @"运行中" : @"已暂停";
         NSString *tokenText = self.token.length ? @"已登录" : @"未登录";
-        self.statusLabel.text = [NSString stringWithFormat:@"状态：%@｜%@", tokenText, modeText];
+        self.statusLabel.text = [NSString stringWithFormat:@"状态: %@ | %@", tokenText, modeText];
 
         if (self.currentTask.itemID.length && self.currentTask.shopID.length) {
-            self.taskLabel.text = [NSString stringWithFormat:@"当前任务：shop=%@  item=%@", self.currentTask.shopID, self.currentTask.itemID];
+            self.taskLabel.text = [NSString stringWithFormat:@"当前任务: shop=%@  item=%@", self.currentTask.shopID, self.currentTask.itemID];
         } else if (self.currentTask.traceID.length) {
-            self.taskLabel.text = [NSString stringWithFormat:@"当前任务：%@", self.currentTask.traceID];
+            self.taskLabel.text = [NSString stringWithFormat:@"当前任务: %@", self.currentTask.traceID];
         } else {
-            self.taskLabel.text = @"当前任务：暂无";
+            self.taskLabel.text = @"当前任务: 暂无";
         }
 
-        self.counterLabel.text = [NSString stringWithFormat:@"本地成功上传：%ld", (long)self.successCount];
+        self.counterLabel.text = [NSString stringWithFormat:@"本地成功上传: %ld", (long)self.successCount];
         [self.startTaskButton setTitle:(self.isRunning ? @"停止任务" : @"启动任务") forState:UIControlStateNormal];
         self.startTaskButton.backgroundColor = self.isRunning ? [UIColor colorWithRed:0.80 green:0.34 blue:0.22 alpha:1.0] : [UIColor colorWithRed:0.19 green:0.44 blue:0.78 alpha:1.0];
 
@@ -1228,17 +1267,17 @@ static NSString *SHPJSONStringFromObject(id object) {
                 NSTimeInterval remaining = MAX(0.0, [self.nextFireDate timeIntervalSinceNow]);
                 NSInteger minutes = (NSInteger)(remaining / 60.0);
                 NSInteger seconds = (NSInteger)remaining % 60;
-                self.counterLabel.text = [NSString stringWithFormat:@"成功：%ld｜休息 %02ld:%02ld", (long)self.successCount, (long)minutes, (long)seconds];
+                self.counterLabel.text = [NSString stringWithFormat:@"本地成功上传: %ld | 休息 %02ld:%02ld", (long)self.successCount, (long)minutes, (long)seconds];
             }
-            [self.startTaskButton setTitle:@"任务休息中" forState:UIControlStateNormal];
+            [self.startTaskButton setTitle:@"休息中" forState:UIControlStateNormal];
             self.startTaskButton.backgroundColor = [UIColor colorWithRed:0.34 green:0.39 blue:0.47 alpha:1.0];
         }
 
-        NSString *restTitle = self.isRestModeEnabled ? @"任务休息：开" : @"任务休息：关";
+        NSString *restTitle = self.isRestModeEnabled ? @"休息开" : @"休息关";
         [self.restModeButton setTitle:restTitle forState:UIControlStateNormal];
         [self.restModeButton setTitleColor:(self.isRestModeEnabled ? [UIColor colorWithRed:0.46 green:0.89 blue:0.86 alpha:1.0] : [UIColor colorWithRed:0.55 green:0.62 blue:0.70 alpha:1.0]) forState:UIControlStateNormal];
+
         [self updateMiniViewContent];
-        [self layoutInterface];
     });
 }
 
@@ -1302,7 +1341,6 @@ static NSString *SHPJSONStringFromObject(id object) {
 - (void)toggleCollapsed {
     self.isCollapsed = !self.isCollapsed;
     [self persistDefaults];
-    [self layoutInterface];
     [self refreshUI];
 }
 
@@ -1458,7 +1496,7 @@ static NSString *SHPJSONStringFromObject(id object) {
     }
     if (self.isResting) {
         self.isResting = NO;
-        [self appendLog:@"Rest finished, continue"];
+        [self appendLog:@"休息结束，继续任务"];
         [self persistDefaults];
         [self refreshUI];
     }
@@ -1490,7 +1528,7 @@ static NSString *SHPJSONStringFromObject(id object) {
         self.nextFireDate = nil;
         [self stopCountdownTimer];
         if (self.isRunning) {
-            [self scheduleNextTaskCycleWithReason:@"任务休息已关闭" immediate:YES];
+            [self scheduleNextTaskCycleWithReason:@"已关闭休息" immediate:YES];
         }
     }
     [self persistDefaults];
@@ -1500,7 +1538,6 @@ static NSString *SHPJSONStringFromObject(id object) {
 - (void)miniViewTapped {
     self.isCollapsed = NO;
     [self persistDefaults];
-    [self layoutInterface];
     [self refreshUI];
 }
 
@@ -1639,7 +1676,7 @@ static NSString *SHPJSONStringFromObject(id object) {
     self.pollTimer = [NSTimer scheduledTimerWithTimeInterval:delay target:self selector:@selector(pollTimerFired) userInfo:nil repeats:NO];
     [self persistDefaults];
     [self refreshUI];
-    [self appendLog:[NSString stringWithFormat:@"Rest after %ld successes for %.0f min", (long)threshold, delay / 60.0]];
+    [self appendLog:[NSString stringWithFormat:@"每%ld个成功后休息%.0f分钟", (long)threshold, delay / 60.0]];
     return YES;
 }
 
@@ -1701,6 +1738,54 @@ static NSString *SHPJSONStringFromObject(id object) {
     [task resume];
 }
 
+- (void)sendGzippedJSONRequestToURL:(NSString *)urlString
+                               body:(NSDictionary *)body
+                         completion:(void (^)(NSInteger statusCode, id jsonObject, NSData *data, NSError *error))completion {
+    NSURL *url = [NSURL URLWithString:urlString];
+    if (!url) {
+        if (completion) {
+            completion(0, nil, nil, [NSError errorWithDomain:@"SHPPlugin" code:-1 userInfo:@{NSLocalizedDescriptionKey: @"invalid URL"}]);
+        }
+        return;
+    }
+
+    NSError *jsonError = nil;
+    NSData *jsonData = [NSJSONSerialization dataWithJSONObject:(body ?: @{}) options:0 error:&jsonError];
+    NSData *gzippedData = jsonError ? nil : SHPGzipData(jsonData);
+    if (!gzippedData.length) {
+        if (completion) {
+            completion(0, nil, nil, jsonError ?: [NSError errorWithDomain:@"SHPPlugin" code:-2 userInfo:@{NSLocalizedDescriptionKey: @"gzip failed"}]);
+        }
+        return;
+    }
+
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
+    request.HTTPMethod = @"POST";
+    request.HTTPBody = gzippedData;
+    [request setValue:@"application/json; charset=utf-8" forHTTPHeaderField:@"Content-Type"];
+    [request setValue:@"gzip" forHTTPHeaderField:@"Content-Encoding"];
+    [request setValue:@"*/*" forHTTPHeaderField:@"Accept"];
+
+    NSURLSessionDataTask *task = [self.session dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        NSInteger statusCode = 0;
+        if ([response isKindOfClass:[NSHTTPURLResponse class]]) {
+            statusCode = ((NSHTTPURLResponse *)response).statusCode;
+        }
+
+        id jsonObject = nil;
+        if (data.length) {
+            jsonObject = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+        }
+
+        if (completion) {
+            SHPDispatchOnMainThread(^{
+                completion(statusCode, jsonObject, data, error);
+            });
+        }
+    }];
+    [task resume];
+}
+
 - (NSString *)extractTokenFromObject:(id)object {
     NSDictionary *root = SHPDictionaryValue(object);
     NSDictionary *data = SHPDictionaryValue(root[@"data"]);
@@ -1730,16 +1815,33 @@ static NSString *SHPJSONStringFromObject(id object) {
     self.waitingForPDP = NO;
 }
 
+- (NSString *)api2Number {
+    return SHPStringValue(self.passwordField.text) ?: [self savedPassword] ?: @"";
+}
+
 - (NSDictionary *)controlPayloadWithAction:(NSString *)action username:(NSString *)username extra:(NSDictionary *)extra {
     NSMutableDictionary *payload = [NSMutableDictionary dictionary];
     if (action.length) {
         payload[@"act"] = action;
     }
     NSString *resolvedUsername = SHPStringValue(username) ?: SHPStringValue(self.usernameField.text) ?: [self savedUsername];
+    if (self.apiType == 2 && ![action isEqualToString:@"api2_login"]) {
+        NSString *api2Number = [self api2Number];
+        if (api2Number.length) {
+            resolvedUsername = api2Number;
+        }
+    }
     if (resolvedUsername.length) {
         payload[@"username"] = resolvedUsername;
     }
-    payload[@"api_type"] = @1;
+    if (self.deviceID.length) {
+        payload[@"device_id"] = self.deviceID;
+        payload[@"fingerprint_key"] = self.deviceID;
+    }
+    if (self.groupID.length) {
+        payload[@"group_id"] = self.groupID;
+    }
+    payload[@"api_type"] = @(self.apiType == 2 ? 2 : 1);
     payload[@"client"] = @"ShopeeTaskHook";
     payload[@"platform"] = @"ios";
     payload[@"device_type"] = @"ios";
@@ -1899,9 +2001,88 @@ static NSString *SHPJSONStringFromObject(id object) {
     }
 }
 
+- (void)loginApi1WithUsername:(NSString *)username password:(NSString *)password completion:(void (^)(BOOL success))completion {
+    [self appendLog:@"接口1登录中..."];
+    NSDictionary *loginBody = [self controlPayloadWithAction:@"api1_login" username:username extra:@{@"password": password}];
+    [self sendJSONRequestToURL:kSHPLoginURL method:@"POST" body:loginBody authorized:NO completion:^(NSInteger statusCode, id jsonObject, NSData *data, NSError *error) {
+        if (error) {
+            [self appendLog:[NSString stringWithFormat:@"登录失败:%@", error.localizedDescription ?: @"err"]];
+            if (completion) {
+                completion(NO);
+            }
+            return;
+        }
+
+        if (![self responseObjectAllowsAccess:jsonObject]) {
+            NSString *message = [self messageFromResponseObject:jsonObject fallback:[NSString stringWithFormat:@"HTTP=%ld", (long)statusCode]];
+            [self appendLog:[NSString stringWithFormat:@"登录拒绝:%@", message]];
+            if (completion) {
+                completion(NO);
+            }
+            return;
+        }
+
+        NSString *token = [self extractTokenFromObject:jsonObject];
+        if (!token.length && data.length) {
+            NSString *rawString = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+            token = SHPRegexFirstMatch(rawString, @"\"(?:access_token|accessToken|token|jwt)\"\\s*:\\s*\"([^\"]+)\"", 1);
+        }
+
+        if (!token.length) {
+            [self appendLog:[NSString stringWithFormat:@"登录无token HTTP=%ld", (long)statusCode]];
+            if (completion) {
+                completion(NO);
+            }
+            return;
+        }
+
+        self.token = token;
+        self.groupID = nil;
+        self.apiType = 1;
+        [self persistDefaults];
+        [self appendLog:@"接口1登录成功"];
+        [self refreshUI];
+        if (completion) {
+            completion(YES);
+        }
+    }];
+}
+
 - (void)loginWithCompletion:(void (^)(BOOL success))completion {
     NSString *username = SHPStringValue(self.usernameField.text) ?: [self savedUsername];
     NSString *password = SHPStringValue(self.passwordField.text) ?: [self savedPassword];
+
+    if (username.length && password.length) {
+        [self appendLog:@"接口2登录中..."];
+        NSDictionary *api2Body = [self controlPayloadWithAction:@"api2_login" username:kSHPApi2FixedUsername extra:@{@"password": password}];
+        [self sendJSONRequestToURL:kSHPLoginURL method:@"POST" body:api2Body authorized:NO completion:^(NSInteger api2StatusCode, id api2JsonObject, NSData *api2Data, NSError *api2Error) {
+            (void)api2Data;
+            if (!api2Error && [self responseObjectAllowsAccess:api2JsonObject]) {
+                NSString *api2Token = [self extractTokenFromObject:api2JsonObject];
+                NSDictionary *root = SHPDictionaryValue(api2JsonObject);
+                NSDictionary *data = SHPDictionaryValue(root[@"data"]);
+                NSString *groupID = SHPStringValue(data[@"groupId"]) ?: SHPStringValue(data[@"group_id"]) ?: kSHPApi2FixedUsername;
+                if (api2Token.length) {
+                    self.token = api2Token;
+                    self.groupID = groupID;
+                    self.apiType = 2;
+                    [self persistDefaults];
+                    [self appendLog:@"接口2登录成功"];
+                    [self refreshUI];
+                    if (completion) {
+                        completion(YES);
+                    }
+                    return;
+                }
+            } else {
+                NSString *message = [self messageFromResponseObject:api2JsonObject fallback:(api2Error.localizedDescription ?: [NSString stringWithFormat:@"HTTP=%ld", (long)api2StatusCode])];
+                [self appendLog:[NSString stringWithFormat:@"接口2登录失败:%@", message ?: @"-"]];
+            }
+
+            [self loginApi1WithUsername:username password:password completion:completion];
+        }];
+        return;
+    }
 
     if (!username.length || !password.length) {
         [self appendLog:@"请填写账号密码"];
@@ -1912,7 +2093,7 @@ static NSString *SHPJSONStringFromObject(id object) {
         return;
     }
 
-    [self appendLog:@"登录中..."];
+        [self appendLog:@"登录中..."];
     NSDictionary *loginBody = [self controlPayloadWithAction:@"api1_login" username:username extra:@{@"password": password}];
     [self sendJSONRequestToURL:kSHPLoginURL method:@"POST" body:loginBody authorized:NO completion:^(NSInteger statusCode, id jsonObject, NSData *data, NSError *error) {
         if (error) {
@@ -2024,6 +2205,42 @@ static NSString *SHPJSONStringFromObject(id object) {
     return task;
 }
 
+- (SHPTask *)buildApi2TaskFromResponseObject:(id)object {
+    NSDictionary *root = SHPDictionaryValue(object);
+    if (!root.count) {
+        return nil;
+    }
+    id okValue = root[@"ok"];
+    if ([okValue respondsToSelector:@selector(boolValue)] && ![okValue boolValue]) {
+        return nil;
+    }
+
+    NSDictionary *taskData = SHPDictionaryValue(root[@"TaskData"]);
+    if (!taskData.count) {
+        return nil;
+    }
+
+    SHPTask *task = [SHPTask new];
+    task.rawPayload = taskData;
+    task.productURL = SHPStringValue(taskData[@"Url"]) ?: SHPFindStringForKeys(taskData, @[@"url", @"Url"]);
+    NSDictionary *taskInfo = SHPDictionaryValue(taskData[@"Task"]);
+    task.traceID = SHPStringValue(taskInfo[@"ID"]) ?: SHPStringValue(taskInfo[@"id"]) ?: NSUUID.UUID.UUIDString;
+
+    if (task.productURL.length) {
+        NSDictionary *ids = SHPExtractIDsFromString(task.productURL);
+        task.shopID = ids[@"shop_id"];
+        task.itemID = ids[@"item_id"];
+    }
+    if (!task.productURL.length) {
+        task.productURL = SHPBuildProductURL(task.shopID, task.itemID);
+    }
+    task.pdpURL = SHPBuildPDPURL(task.shopID, task.itemID);
+    if (!task.itemID.length || !task.shopID.length) {
+        return nil;
+    }
+    return task;
+}
+
 - (void)fetchTaskIfPossibleForce:(BOOL)force {
     if (self.requestInFlight || self.submittingCurrentTask) {
         return;
@@ -2049,7 +2266,43 @@ static NSString *SHPJSONStringFromObject(id object) {
     }
 
     self.requestInFlight = YES;
-    [self appendLog:@"取任务..."];
+    if (self.apiType == 2) {
+        NSString *api2Group = self.groupID.length ? self.groupID : kSHPApi2FixedUsername;
+        NSString *api2Number = [self api2Number];
+        NSString *api2Use = [NSString stringWithFormat:@"%@_%@", api2Group, (api2Number.length ? api2Number : kSHPApi2FixedUsername)];
+        [self appendLog:@"接口2取任务..."];
+        [self sendGzippedJSONRequestToURL:kSHPApi2TakeTaskURL body:@{@"info": @"\u9359\u7248\u5495", @"use": api2Use} completion:^(NSInteger statusCode, id jsonObject, NSData *data, NSError *error) {
+            self.requestInFlight = NO;
+            if (error) {
+                [self appendLog:[NSString stringWithFormat:@"接口2取任务失败:%@", error.localizedDescription ?: @"err"]];
+                if (self.isRunning) {
+                    [self scheduleNextTaskCycleWithReason:@"接口2取任务失败" immediate:NO];
+                }
+                return;
+            }
+
+            SHPTask *task = [self buildApi2TaskFromResponseObject:jsonObject];
+            if (!task) {
+                NSString *message = [self messageFromResponseObject:jsonObject fallback:[NSString stringWithFormat:@"HTTP=%ld", (long)statusCode]];
+                if (!jsonObject && data.length) {
+                    message = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] ?: message;
+                }
+                [self appendLog:[NSString stringWithFormat:@"接口2暂无任务:%@", message ?: @"-"]];
+                if (self.isRunning) {
+                    [self scheduleNextTaskCycleWithReason:@"接口2暂无任务" immediate:NO];
+                }
+                return;
+            }
+
+            self.currentTask = task;
+            [self persistDefaults];
+            [self refreshUI];
+            [self appendLog:[NSString stringWithFormat:@"接口2任务 %@/%@", task.shopID, task.itemID]];
+            [self openCurrentTask];
+        }];
+        return;
+    }
+        [self appendLog:@"取任务..."];
     [self sendJSONRequestToURL:kSHPTakeTaskURL method:@"GET" body:nil authorized:YES completion:^(NSInteger statusCode, id jsonObject, NSData *data, NSError *error) {
         self.requestInFlight = NO;
 
@@ -2105,6 +2358,20 @@ static NSString *SHPJSONStringFromObject(id object) {
         [self appendLog:[NSString stringWithFormat:@"任务 %@/%@", task.shopID, task.itemID]];
         [self openCurrentTask];
     }];
+}
+
+- (BOOL)handleNoDataCaptureWithMessage:(NSString *)message currentItemID:(NSString *)currentItemID {
+    (void)currentItemID;
+    self.consecutivePDPFailures += 1;
+    [self appendLog:[NSString stringWithFormat:@"%@（连续%ld次）", message, (long)self.consecutivePDPFailures]];
+    if (self.consecutivePDPFailures >= 2) {
+        [self handleRiskControlDetectedWithMessage:@"连续两次未获取到数据，疑似触发风控或验证码，请手动查看，已自动暂停"];
+        return YES;
+    }
+    if (self.isRunning) {
+        [self finishCurrentTaskAndContinueWithSuccess:NO reason:[NSString stringWithFormat:@"%@，已跳过", message]];
+    }
+    return NO;
 }
 
 - (BOOL)isUsableMainWindow:(UIWindow *)window {
@@ -2545,14 +2812,9 @@ static NSString *SHPJSONStringFromObject(id object) {
         if (![self.currentTask.itemID isEqualToString:currentItemID]) {
             return;
         }
-        self.consecutivePDPFailures += 1;
-        if (self.consecutivePDPFailures >= 2) {
-            [self appendLog:@"连续两次未获取到数据，疑似触发风控或验证码，请手动查看，已自动暂停"];
-            [self handleRiskControlDetected];
+        if ([self handleNoDataCaptureWithMessage:@"获取数据超时" currentItemID:currentItemID]) {
             return;
         }
-        [self appendLog:@"获取数据超时,跳过"];
-        [self finishCurrentTaskAndContinueWithSuccess:NO reason:@"获取数据超时"];
     });
 }
 
@@ -2665,16 +2927,56 @@ static NSString *SHPJSONStringFromObject(id object) {
     self.pendingSubmitJSONString = [jsonString copy];
     self.pendingSubmitSourceURL = [submitURL copy];
 
+    NSString *username = SHPStringValue(self.usernameField.text) ?: [self savedUsername] ?: @"";
+    BOOL usingApi2 = self.apiType == 2;
+    NSString *submitID = NSUUID.UUID.UUIDString;
     NSMutableDictionary *body = [NSMutableDictionary dictionary];
-    [body setObject:@"api1_submit" forKey:@"act"];
+    [body setObject:(usingApi2 ? @"api2_submit_plain" : @"api1_submit") forKey:@"act"];
+    [body setObject:@(usingApi2 ? 2 : 1) forKey:@"api_type"];
     [body setObject:kSHPSubmitAppVersion forKey:@"appVersion"];
     [body setObject:(submitURL ?: @"") forKey:@"url"];
     [body setObject:jsonString forKey:@"result"];
+    [body setObject:jsonString forKey:@"data"];
+    [body setObject:submitID forKey:@"submit_id"];
+    if (usingApi2) {
+        NSString *api2Group = self.groupID.length ? self.groupID : kSHPApi2FixedUsername;
+        NSString *api2Number = [self api2Number];
+        NSDictionary *taskData = SHPDictionaryValue(self.currentTask.rawPayload);
+        NSDictionary *taskInfo = SHPDictionaryValue(taskData[@"Task"]);
+        if (!taskInfo.count) {
+            taskInfo = self.currentTask.traceID.length ? @{@"ID": self.currentTask.traceID} : @{};
+        }
+        [body setObject:(api2Number.length ? api2Number : kSHPApi2FixedUsername) forKey:@"username"];
+        [body setObject:api2Group forKey:@"group_id"];
+        [body setObject:taskInfo forKey:@"task_info"];
+    } else if (username.length) {
+        [body setObject:username forKey:@"username"];
+    }
+    if (self.deviceID.length) {
+        [body setObject:self.deviceID forKey:@"device_id"];
+        [body setObject:self.deviceID forKey:@"fingerprint_key"];
+    }
+    if (self.currentTask.traceID.length) {
+        [body setObject:self.currentTask.traceID forKey:@"task_id"];
+        [body setObject:self.currentTask.traceID forKey:@"trace_id"];
+    }
+    if (self.currentTask.itemID.length) {
+        [body setObject:self.currentTask.itemID forKey:@"item_id"];
+    }
+    if (self.currentTask.shopID.length) {
+        [body setObject:self.currentTask.shopID forKey:@"shop_id"];
+    }
+    if (self.currentTask.productURL.length) {
+        [body setObject:self.currentTask.productURL forKey:@"product_url"];
+    }
+    if (self.currentTask.pdpURL.length) {
+        [body setObject:self.currentTask.pdpURL forKey:@"pdp_url"];
+    }
     if (self.token.length) {
         [body setObject:self.token forKey:@"auth_token"];
     }
 
-    [self appendLog:@"提交中..."];
+    [self appendLog:[NSString stringWithFormat:@"提交中... %@", submitID]];
     [self sendJSONRequestToURL:kSHPControlURL method:@"POST" body:body authorized:YES completion:^(NSInteger statusCode, id jsonObject, NSData *data, NSError *error) {
         if (error) {
             [self appendLog:[NSString stringWithFormat:@"提交失败:%@", error.localizedDescription ?: @"未知"]];
@@ -2699,17 +3001,87 @@ static NSString *SHPJSONStringFromObject(id object) {
         }
 
         NSDictionary *respDict = [jsonObject isKindOfClass:[NSDictionary class]] ? (NSDictionary *)jsonObject : nil;
+        NSString *respCode = SHPStringValue(respDict[@"code"]);
+        NSString *respMsg = SHPStringValue(respDict[@"msg"]) ?: SHPStringValue(respDict[@"message"]);
         NSDictionary *respData = SHPDictionaryValue(respDict[@"data"]);
-        NSString *rootCode = SHPStringValue(respDict[@"code"]);
-        NSString *dataCode = SHPStringValue(respData[@"code"]);
-        NSString *respMsg = SHPStringValue(respData[@"msg"]) ?: SHPStringValue(respDict[@"msg"]) ?: SHPStringValue(respDict[@"message"]);
+        NSString *respDataCode = SHPStringValue(respData[@"code"]);
+        NSString *respDataMsg = SHPStringValue(respData[@"msg"]);
+        BOOL api2SubmitOK = usingApi2 && [self responseObjectAllowsAccess:jsonObject];
+        if (usingApi2 && api2SubmitOK) {
+            id okValue = respDict[@"ok"];
+            if ([okValue respondsToSelector:@selector(boolValue)]) {
+                api2SubmitOK = [okValue boolValue];
+            } else if (respCode.length) {
+                api2SubmitOK = [respCode isEqualToString:@"200"] || [respCode caseInsensitiveCompare:@"SUCCESS"] == NSOrderedSame;
+            }
+        }
+        if (usingApi2 && !api2SubmitOK) {
+            [self appendLog:[NSString stringWithFormat:@"接口2提交失败:%@", respMsg ?: respCode ?: @"unknown"]];
+            [self finishCurrentTaskAndContinueWithSuccess:NO reason:nil];
+            return;
+        }
+        NSDictionary *proxyInfo = SHPDictionaryValue(respDict[@"_proxy"]);
+        BOOL proxyContextMatch = YES;
+        if (proxyInfo.count) {
+            id matchValue = proxyInfo[@"context_match"];
+            if ([matchValue respondsToSelector:@selector(boolValue)]) {
+                proxyContextMatch = [matchValue boolValue];
+            }
+        }
+        if (proxyInfo.count && !proxyContextMatch) {
+            NSString *proxySubmitID = SHPStringValue(proxyInfo[@"submit_id"]);
+            NSString *proxyTaskID = SHPStringValue(proxyInfo[@"task_id"]);
+            [self appendLog:[NSString stringWithFormat:@"提交回执不匹配 submit=%@ task=%@", proxySubmitID ?: @"-", proxyTaskID ?: @"-"]];
+        }
 
-        if (![rootCode isEqualToString:@"200"] || ![dataCode isEqualToString:@"SUCCESS"]) {
-            [self appendLog:[NSString stringWithFormat:@"提交业务失败 code=%@ data.code=%@ msg=%@", rootCode ?: @"<nil>", dataCode ?: @"<nil>", respMsg ?: @"<nil>"]];
+        if (respCode.length && ![respCode isEqualToString:@"200"]) {
+            [self appendLog:[NSString stringWithFormat:@"提交失败:%@", respMsg ?: respCode]];
             [self finishCurrentTaskAndContinueWithSuccess:NO reason:nil];
             return;
         }
 
+        if (respDataCode.length && ![respDataCode isEqualToString:@"SUCCESS"]) {
+            NSString *failureText = respDataMsg.length ? respDataMsg : respDataCode;
+            [self appendLog:[NSString stringWithFormat:@"提交失败:%@", failureText]];
+            [self finishCurrentTaskAndContinueWithSuccess:NO reason:nil];
+            return;
+        }
+
+        if (respMsg.length) {
+            NSString *lowerMsg = respMsg.lowercaseString;
+            if ([lowerMsg containsString:@"不正确"] ||
+                [lowerMsg containsString:@"失败"] ||
+                [lowerMsg containsString:@"错误"] ||
+                [lowerMsg containsString:@"invalid"] ||
+                [lowerMsg containsString:@"fail"] ||
+                [lowerMsg containsString:@"error"]) {
+                [self appendLog:[NSString stringWithFormat:@"提交失败:%@", respMsg]];
+                [self finishCurrentTaskAndContinueWithSuccess:NO reason:nil];
+                return;
+            }
+        }
+
+        if (respDataMsg.length) {
+            NSString *lowerMsg = respDataMsg.lowercaseString;
+            if ([lowerMsg containsString:@"不正确"] ||
+                [lowerMsg containsString:@"失败"] ||
+                [lowerMsg containsString:@"错误"] ||
+                [lowerMsg containsString:@"invalid"] ||
+                [lowerMsg containsString:@"fail"] ||
+                [lowerMsg containsString:@"error"]) {
+                [self appendLog:[NSString stringWithFormat:@"提交失败:%@", respDataMsg]];
+                [self finishCurrentTaskAndContinueWithSuccess:NO reason:nil];
+                return;
+            }
+        }
+
+        if (!proxyContextMatch) {
+            [self appendLog:@"提交失败:上游回执上下文不匹配"];
+            [self finishCurrentTaskAndContinueWithSuccess:NO reason:nil];
+            return;
+        }
+
+        [self appendLog:@"提交确认成功"];
         [self finishCurrentTaskAndContinueWithSuccess:YES reason:nil];
     }];
 }
@@ -2763,14 +3135,10 @@ static NSString *SHPJSONStringFromObject(id object) {
                 if (currentItemID.length && ![self.currentTask.itemID isEqualToString:currentItemID]) {
                     return;
                 }
-                self.consecutivePDPFailures += 1;
                 self.waitingForPDP = NO;
-                [self appendLog:[NSString stringWithFormat:@"获取数据异常 error=%ld 连续%ld次", (long)errorCode, (long)self.consecutivePDPFailures]];
-                if (self.consecutivePDPFailures >= 2) {
-                    [self appendLog:@"连续两次未获取到数据，疑似触发风控或验证码，请手动查看，已自动暂停"];
-                    [self handleRiskControlDetected];
-                } else {
-                    [self finishCurrentTaskAndContinueWithSuccess:NO reason:@"获取数据异常"];
+                NSString *reason = [NSString stringWithFormat:@"获取数据异常 error=%ld", (long)errorCode];
+                if ([self handleNoDataCaptureWithMessage:reason currentItemID:currentItemID]) {
+                    return;
                 }
             });
             return;
@@ -2815,6 +3183,10 @@ static NSString *SHPJSONStringFromObject(id object) {
 }
 
 - (void)handleRiskControlDetected {
+    [self handleRiskControlDetectedWithMessage:@"检测到风控，已自动停止"];
+}
+
+- (void)handleRiskControlDetectedWithMessage:(NSString *)message {
     dispatch_async(dispatch_get_main_queue(), ^{
         if (self.isRiskControlled) {
             return;
@@ -2822,6 +3194,9 @@ static NSString *SHPJSONStringFromObject(id object) {
         self.isRiskControlled = YES;
 
         self.isRunning = NO;
+        self.requestInFlight = NO;
+        self.submittingCurrentTask = NO;
+        self.waitingForPDP = NO;
         [self.pollTimer invalidate];
         self.pollTimer = nil;
         self.nextFireDate = nil;
@@ -2831,7 +3206,7 @@ static NSString *SHPJSONStringFromObject(id object) {
         [self clearPendingSubmissionState];
         [self persistDefaults];
 
-        [self appendLog:@"检测到风控,已自动停止"];
+        [self appendLog:message.length ? message : @"检测到风控，已自动停止"];
         [self refreshUI];
     });
 }

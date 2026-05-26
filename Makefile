@@ -8,7 +8,7 @@ TWEAK_NAME = ShopeeTaskHook
 
 ShopeeTaskHook_FILES = Tweak.xm
 ShopeeTaskHook_FRAMEWORKS = Foundation UIKit
+ShopeeTaskHook_LIBRARIES = z
 ShopeeTaskHook_CFLAGS = -fobjc-arc -Wno-error=deprecated-declarations
 
 include $(THEOS_MAKE_PATH)/tweak.mk
-

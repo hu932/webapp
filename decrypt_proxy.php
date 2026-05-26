@@ -21,6 +21,7 @@ $API1_TOKEN_MAP_FILE = __DIR__ . '/api1_token_map.json';
 $API1_ACCOUNTS_FILE = __DIR__ . '/api1_allowed_accounts.json';
 $API2_ACCOUNTS_FILE = __DIR__ . '/api2_allowed_accounts.json';
 $API2_NUMBERS_FILE = __DIR__ . '/api2_number_remarks.json';
+$API2_FIXED_USERNAME = "\xE7\xB1\xB3\xE4\xB9\x90\xE7\xB1\xB3\xE4\xB9\x90";
 $MAX_LOGS = 500;
 $FORWARD_TIMEOUT = 8;
 $FORWARD_CONNECT_TIMEOUT = 6;
@@ -634,7 +635,7 @@ function readVersionControls(string $file): array {
         'min_version_code' => 0,
         'min_version_msg' => '您的版本已停用，请更新到最新版本',
         'blocked_versions' => [],
-        'api2_login_min' => 1,
+        'api2_login_min' => 0,
         'api2_login_max' => 10000,
         'updated_at' => '',
     ];
@@ -650,7 +651,7 @@ function saveVersionControls(string $file, array $input): array {
     if (isset($input['blocked_versions']) && is_array($input['blocked_versions'])) {
         $config['blocked_versions'] = $input['blocked_versions'];
     }
-    $api2Min = max(1, (int)($input['api2_login_min'] ?? $config['api2_login_min']));
+    $api2Min = max(0, (int)($input['api2_login_min'] ?? $config['api2_login_min']));
     $api2Max = max($api2Min, (int)($input['api2_login_max'] ?? $config['api2_login_max']));
     $config['api2_login_min'] = $api2Min;
     $config['api2_login_max'] = $api2Max;
@@ -684,6 +685,15 @@ function elapsedMs(float $start): int {
 
 function durationMs(float $start, float $end): int {
     return (int)round(($end - $start) * 1000);
+}
+
+function api2ForwardPayload(string $username, string $groupId, array $taskInfo, array $actualData): array {
+    return [
+        "\xE9\x90\xA2\xE3\x84\xA6\xE5\x9F\x9B\xE9\x8D\x9A\x3F" => $username,
+        "\xE7\xBC\x81\xE5\x87\xA6\x44" => $groupId,
+        "\xE6\xB5\xA0\xE8\xAF\xB2\xE5\xA7\x9F\xE9\x8F\x81\xE7\x89\x88\xE5\xB5\x81" => $taskInfo,
+        'data' => $actualData,
+    ];
 }
 
 function api1ForwardSuccess($serverResp): bool {
@@ -1065,7 +1075,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['act'])) {
         $input = [
             'min_version_code' => (int)($_GET['min_version_code'] ?? 0),
             'min_version_msg' => trim((string)($_GET['min_version_msg'] ?? '')),
-            'api2_login_min' => (int)($_GET['api2_login_min'] ?? 1),
+            'api2_login_min' => (int)($_GET['api2_login_min'] ?? 0),
             'api2_login_max' => (int)($_GET['api2_login_max'] ?? 10000),
         ];
         $blockedJson = (string)($_GET['blocked_versions'] ?? '');
@@ -1286,13 +1296,17 @@ if ($postAct === 'api1_login') {
 }
 
 if ($postAct === 'api2_login') {
+    global $API2_FIXED_USERNAME;
     $username = trim((string)($input['username'] ?? ''));
     $password = (string)($input['password'] ?? '');
     if ($username === '' || $password === '') {
         jsonResp(['code' => '400', 'data' => null, 'msg' => '账号或密码为空']);
     }
+    if ($username !== $API2_FIXED_USERNAME) {
+        jsonResp(['code' => '403', 'data' => null, 'msg' => '接口2账号固定为米乐米乐']);
+    }
     $versionConfig = readVersionControls($VERSION_CTRL_FILE);
-    $api2Min = max(1, (int)($versionConfig['api2_login_min'] ?? 1));
+    $api2Min = max(0, (int)($versionConfig['api2_login_min'] ?? 0));
     $api2Max = max($api2Min, (int)($versionConfig['api2_login_max'] ?? 10000));
     if (!preg_match('/^\d+$/', $password) || (int)$password < $api2Min || (int)$password > $api2Max) {
         jsonResp(['code' => '403', 'data' => null, 'msg' => "接口2编号需在{$api2Min}-{$api2Max}范围内"]);
@@ -1326,6 +1340,12 @@ if ($postAct === 'api1_submit') {
     $username = trim((string)($input['username'] ?? ''));
     $submitUrl = trim((string)($input['url'] ?? ''));
     $submitResult = (string)($input['result'] ?? '');
+    $submitId = trim((string)($input['submit_id'] ?? ''));
+    $taskId = trim((string)($input['task_id'] ?? $input['trace_id'] ?? ''));
+    $itemId = trim((string)($input['item_id'] ?? ''));
+    $shopId = trim((string)($input['shop_id'] ?? ''));
+    $productUrl = trim((string)($input['product_url'] ?? ''));
+    $pdpUrl = trim((string)($input['pdp_url'] ?? ''));
     $submitToken = trim((string)($input['auth_token'] ?? $input['token'] ?? ''));
     if ($submitToken === '') {
         $authHeader = (string)($_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
@@ -1360,6 +1380,13 @@ if ($postAct === 'api1_submit') {
     if (!$isForwardSuccess && api1ParseTimeoutResponse($serverResp, (string)$result['response'])) {
         $isForwardSuccess = false;
     }
+    $respData = is_array($serverResp['data'] ?? null) ? $serverResp['data'] : null;
+    $serverTaskId = is_array($respData) ? trim((string)($respData['task_id'] ?? $respData['trace_id'] ?? $respData['id'] ?? '')) : '';
+    $serverReceivedId = is_array($respData) ? trim((string)($respData['submit_id'] ?? '')) : '';
+    $proxyContextMatch = $taskId !== '' ? (($serverTaskId !== '' && $serverTaskId === $taskId) || ($serverReceivedId !== '' && $serverReceivedId === $submitId)) : true;
+    if (!$proxyContextMatch) {
+        $isForwardSuccess = false;
+    }
 
     $uploadId = date('Ymd_His') . '_' . substr(md5($rawBody . '|ios_submit'), 0, 8);
     $logEntry = [
@@ -1375,6 +1402,13 @@ if ($postAct === 'api1_submit') {
         'task_url' => $submitUrl,
         'forward_url' => $TARGETS[1]['url'],
         'forward_result_len' => strlen($submitResult),
+        'submit_id' => $submitId,
+        'task_id' => $taskId,
+        'shop_id' => $shopId,
+        'item_id' => $itemId,
+        'server_task_id' => $serverTaskId,
+        'server_submit_id' => $serverReceivedId,
+        'proxy_context_match' => $proxyContextMatch,
         'forward_attempts' => [forwardAttemptSummary($result, $serverResp) + ['attempt' => 1, 'total_ms' => $forwardMs]],
         'response' => compactLogResponse($serverResp ?? $result['response'], $MAX_LOG_RESPONSE_BYTES),
         'upload_id' => $uploadId,
@@ -1403,6 +1437,13 @@ if ($postAct === 'api1_submit') {
         'response_json' => is_array($serverResp) ? $serverResp : null,
         'response_raw' => $result['response'],
         'error' => $result['error'],
+        'submit_id' => $submitId,
+        'task_id' => $taskId,
+        'shop_id' => $shopId,
+        'item_id' => $itemId,
+        'server_task_id' => $serverTaskId,
+        'server_submit_id' => $serverReceivedId,
+        'proxy_context_match' => $proxyContextMatch,
         'forward_attempts' => $logEntry['forward_attempts'],
     ];
 
@@ -1413,10 +1454,130 @@ if ($postAct === 'api1_submit') {
     if ($result['error']) {
         jsonResp(['ok' => false, 'msg' => '转发失败: ' . $result['error']]);
     }
-    if ($serverResp) {
+    if ($serverResp && $proxyContextMatch) {
+        $serverResp['_proxy'] = [
+            'submit_id' => $submitId,
+            'task_id' => $taskId,
+            'server_task_id' => $serverTaskId,
+            'server_submit_id' => $serverReceivedId,
+            'context_match' => $proxyContextMatch,
+        ];
         jsonResp($serverResp);
     }
+    if ($serverResp && !$proxyContextMatch) {
+        jsonResp([
+            'ok' => false,
+            'msg' => '上游未返回当前任务回执',
+            'upstream' => $serverResp,
+            '_proxy' => [
+                'submit_id' => $submitId,
+                'task_id' => $taskId,
+                'server_task_id' => $serverTaskId,
+                'server_submit_id' => $serverReceivedId,
+                'context_match' => false,
+            ],
+        ]);
+    }
     jsonResp(['ok' => false, 'msg' => '任务服务器响应异常', 'raw' => $result['response']]);
+}
+
+if ($postAct === 'api2_submit_plain') {
+    $submitStart = microtime(true);
+    $username = trim((string)($input['username'] ?? ''));
+    $groupId = trim((string)($input['group_id'] ?? ''));
+    $taskInfo = $input['task_info'] ?? null;
+    $plainData = $input['data'] ?? $input['result'] ?? '';
+    $submitId = trim((string)($input['submit_id'] ?? ''));
+    $taskId = trim((string)($input['task_id'] ?? $input['trace_id'] ?? ''));
+    $itemId = trim((string)($input['item_id'] ?? ''));
+    $shopId = trim((string)($input['shop_id'] ?? ''));
+    if ($username === '' || $groupId === '' || !is_array($taskInfo) || $plainData === '') {
+        jsonResp(['ok' => false, 'msg' => '接口2提交缺少字段']);
+    }
+
+    $deviceCheck = checkDeviceAllowed($DEVICE_FILE, $input + ['api_type' => 2]);
+    if (empty($deviceCheck['allowed'])) {
+        recordStats($STATS_DIR, $input, 2, 'device_disabled');
+        jsonResp(['ok' => false, 'msg' => $deviceCheck['msg'] ?? '设备已禁用']);
+    }
+
+    $actualData = is_string($plainData) ? json_decode($plainData, true) : $plainData;
+    if (!is_array($actualData)) {
+        jsonResp(['ok' => false, 'msg' => '接口2提交data不是JSON对象']);
+    }
+
+    /* $unusedPayload = [
+        '鐢ㄦ埛鍚?' => $username,
+        '缁処D' => $groupId,
+        '浠诲姟鏁版嵁' => $taskInfo,
+        '鐢ㄦ埛鍚?' => $username, '缁処D' => $groupId,
+        '浠诲姟鏁版嵁' => $taskInfo, 'data' => $actualData,
+    ]; */
+    $payload = [];
+    $payload['鐢ㄦ埛鍚?'] = $username;
+    $payload['缁処D'] = $groupId;
+    $payload['浠诲姟鏁版嵁'] = $taskInfo;
+    $payload['data'] = $actualData;
+    $payload = api2ForwardPayload($username, $groupId, $taskInfo, $actualData);
+    $forwardBody = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $stageMark = microtime(true);
+    $result = forwardToServer($TARGETS[2]['url'], (string)$forwardBody, true, []);
+    $serverResp = json_decode((string)$result['response'], true);
+    $forwardMs = durationMs($stageMark, microtime(true));
+    $isForwardSuccess = api2ForwardSuccess($serverResp);
+
+    $uploadId = date('Ymd_His') . '_' . substr(md5($rawBody . '|ios_api2_submit'), 0, 8);
+    $logEntry = [
+        'time' => date('Y-m-d H:i:s'),
+        'api_type' => 2,
+        'ip' => $_SERVER['REMOTE_ADDR'] ?? '',
+        'username' => $username,
+        'group_id' => $groupId,
+        'account_remark' => displayAccountRemark(2, $username, $groupId),
+        'device_id' => $input['device_id'] ?? '',
+        'fingerprint_key' => $input['fingerprint_key'] ?? '',
+        'status' => $result['error'] ? 'forward_fail' : ($isForwardSuccess ? 'success' : 'task_server_error'),
+        'source' => 'ios_api2_submit',
+        'submit_id' => $submitId,
+        'task_id' => $taskId,
+        'shop_id' => $shopId,
+        'item_id' => $itemId,
+        'task_info' => $taskInfo,
+        'forward_url' => $TARGETS[2]['url'],
+        'forward_attempts' => [forwardAttemptSummary($result, $serverResp) + ['attempt' => 1, 'total_ms' => $forwardMs]],
+        'response' => compactLogResponse($serverResp ?? $result['response'], $MAX_LOG_RESPONSE_BYTES),
+        'upload_id' => $uploadId,
+        'timing_ms' => [
+            'raw_read' => $rawReadMs,
+            'request_json' => $requestJsonMs,
+            'build_forward_body' => 0,
+            'forward' => $forwardMs,
+            'total' => elapsedMs($submitStart),
+        ],
+    ];
+    if ($result['error']) $logEntry['error'] = $result['error'];
+    $uploadDetail = [
+        'time' => date('Y-m-d H:i:s'),
+        'api_type' => 2,
+        'source' => 'ios_api2_submit',
+        'target_url' => $TARGETS[2]['url'],
+        'method' => 'POST',
+        'content_encoding' => 'gzip',
+        'request_body' => $payload,
+        'http_code' => $result['http_code'] ?? 0,
+        'response_json' => is_array($serverResp) ? $serverResp : null,
+        'response_raw' => $result['response'],
+        'error' => $result['error'],
+    ];
+    appendLog($LOG_FILE, $logEntry, $MAX_LOGS);
+    recordStats($STATS_DIR, $input + ['api_type' => 2], 2, $logEntry['status'], is_array($taskInfo) ? (string)($taskInfo['ID'] ?? '') : '');
+    if ($logEntry['status'] !== 'success' || $SAVE_SUCCESS_UPLOAD_DUMPS) {
+        saveUploadDump($uploadId, $uploadDetail);
+    }
+    if ($result['error']) {
+        jsonResp(['ok' => false, 'msg' => '转发失败: ' . $result['error']]);
+    }
+    jsonResp($serverResp ?: ['ok' => false, 'msg' => '任务服务器响应异常', 'raw' => $result['response']]);
 }
 
 if ($postAct === 'heartbeat') {
@@ -1560,6 +1721,9 @@ if ($apiType === 2) {
     $taskInfo = $input['任务数据'] ?? null;
     if (!$username || !$groupId || !$taskInfo) jsonResp(['ok' => false, 'msg' => '接口2缺少字段']);
 
+    if (!$username && !empty($input['username'])) $username = $input['username'];
+    if (!$groupId && !empty($input['group_id'])) $groupId = $input['group_id'];
+    if (!$taskInfo && !empty($input['task_info'])) $taskInfo = $input['task_info'];
     $logEntry['username'] = $username;
     $logEntry['group_id'] = $groupId;
     $logEntry['account_remark'] = displayAccountRemark(2, (string)$username, (string)$groupId);
@@ -1577,6 +1741,7 @@ if ($apiType === 2) {
         '用户名' => $username, '组ID' => $groupId,
         '任务数据' => $taskInfo, 'data' => $actualData,
     ];
+    $payload = api2ForwardPayload((string)$username, (string)$groupId, is_array($taskInfo) ? $taskInfo : [], $actualData);
     $logEntry['forward_data_type'] = gettype($payload['data']);
     $logEntry['forward_data_keys'] = is_array($payload['data']) ? array_slice(array_keys($payload['data']), 0, 30) : null;
     $logEntry['forward_has_response_body_raw'] = is_string($responseBodyRaw) && $responseBodyRaw !== '';
@@ -2049,8 +2214,8 @@ pre.resp{background:#f8fafc;padding:12px 14px;border-radius:8px;font-size:12px;o
                 <div class="form-grid" style="margin-bottom:20px">
                     <div class="form-item"><label>最低允许版本号 (versionCode)</label><input id="vcMinCode" type="number" min="0" value="0" placeholder="0表示不限制"></div>
                     <div class="form-item"><label>低版本停用提示语</label><input id="vcMinMsg" value="" placeholder="您的版本已停用，请更新到最新版本"></div>
-                    <div class="form-item"><label>接口2编号最小值</label><input id="api2LoginMin" type="number" min="1" value="1"></div>
-                    <div class="form-item"><label>接口2编号最大值</label><input id="api2LoginMax" type="number" min="1" value="10000"></div>
+                    <div class="form-item"><label>接口2编号最小值</label><input id="api2LoginMin" type="number" min="0" value="0"></div>
+                    <div class="form-item"><label>接口2编号最大值</label><input id="api2LoginMax" type="number" min="0" value="10000"></div>
                 </div>
                 <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px">
                     <button class="btn btn-primary" onclick="saveVerCtrl()">保存设置</button>
@@ -2471,7 +2636,7 @@ function setAccountPageSize(apiType,size){
 function updateApi2RangeTip(config){
     const el=document.getElementById('api2LoginRangeTip');
     if(!el)return;
-    const min=config&&config.api2_login_min?config.api2_login_min:1;
+    const min=(config&&config.api2_login_min!==undefined)?config.api2_login_min:0;
     const max=config&&config.api2_login_max?config.api2_login_max:10000;
     el.textContent='用于接口2登录账号白名单；登录密码为 '+min+'-'+max+' 内的用户编号';
 }
@@ -2671,7 +2836,7 @@ async function loadVerCtrl(){
     const c=d.data||{};
     document.getElementById('vcMinCode').value=c.min_version_code||0;
     document.getElementById('vcMinMsg').value=c.min_version_msg||'';
-    document.getElementById('api2LoginMin').value=c.api2_login_min||1;
+    document.getElementById('api2LoginMin').value=(c.api2_login_min!==undefined?c.api2_login_min:0);
     document.getElementById('api2LoginMax').value=c.api2_login_max||10000;
     vcBlockedVersions=c.blocked_versions||{};
     document.getElementById('vcResult').textContent=c.updated_at?'上次保存: '+c.updated_at:'';
@@ -2709,7 +2874,7 @@ function removeBlockedVer(code){
 async function saveVerCtrl(){
     const minCode=document.getElementById('vcMinCode').value||'0';
     const minMsg=document.getElementById('vcMinMsg').value||'';
-    const api2Min=document.getElementById('api2LoginMin').value||'1';
+    const api2Min=document.getElementById('api2LoginMin').value||'0';
     const api2Max=document.getElementById('api2LoginMax').value||'10000';
     document.getElementById('vcResult').textContent='保存中...';
     const params=new URLSearchParams({
