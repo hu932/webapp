@@ -409,6 +409,28 @@ static NSDictionary<NSString *, NSString *> *SHPExtractIDsFromString(NSString *t
     return result.copy;
 }
 
+static NSDictionary<NSString *, NSString *> *SHPExtractTrailingPathIDs(NSString *text) {
+    if (!text.length) {
+        return @{};
+    }
+
+    NSString *trimmed = [text stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"/"]];
+    NSArray<NSString *> *parts = [trimmed componentsSeparatedByString:@"/"];
+    if (parts.count < 2) {
+        return @{};
+    }
+
+    NSString *shopID = SHPStringValue(parts[parts.count - 2]);
+    NSString *itemID = SHPStringValue(parts.lastObject);
+    NSCharacterSet *digits = [NSCharacterSet decimalDigitCharacterSet];
+    BOOL shopNumeric = shopID.length && [[shopID stringByTrimmingCharactersInSet:digits] length] == 0;
+    BOOL itemNumeric = itemID.length && [[itemID stringByTrimmingCharactersInSet:digits] length] == 0;
+    if (!shopNumeric || !itemNumeric) {
+        return @{};
+    }
+    return @{@"shop_id": shopID, @"item_id": itemID};
+}
+
 static NSString *SHPBuildProductURL(NSString *shopID, NSString *itemID) {
     if (!shopID.length || !itemID.length) {
         return nil;
@@ -2228,6 +2250,9 @@ static NSData *SHPGzipData(NSData *data) {
 
     if (task.productURL.length) {
         NSDictionary *ids = SHPExtractIDsFromString(task.productURL);
+        if (!ids.count) {
+            ids = SHPExtractTrailingPathIDs(task.productURL);
+        }
         task.shopID = ids[@"shop_id"];
         task.itemID = ids[@"item_id"];
     }
@@ -2286,6 +2311,11 @@ static NSData *SHPGzipData(NSData *data) {
                 NSString *message = [self messageFromResponseObject:jsonObject fallback:[NSString stringWithFormat:@"HTTP=%ld", (long)statusCode]];
                 if (!jsonObject && data.length) {
                     message = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] ?: message;
+                } else if (jsonObject) {
+                    NSString *rawJSON = SHPJSONStringFromObject(jsonObject);
+                    if (rawJSON.length) {
+                        message = [message stringByAppendingFormat:@" %@", rawJSON];
+                    }
                 }
                 [self appendLog:[NSString stringWithFormat:@"接口2暂无任务:%@", message ?: @"-"]];
                 if (self.isRunning) {
