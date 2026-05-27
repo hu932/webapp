@@ -495,6 +495,76 @@ static NSString *SHPJSONStringFromObject(id object) {
     return [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
 }
 
+static BOOL SHPObjectHasPDPDetail(id object) {
+    NSArray<NSString *> *detailKeys = @[
+        @"models",
+        @"tier_variations",
+        @"price",
+        @"price_min",
+        @"price_max",
+        @"stock",
+        @"description",
+        @"images",
+        @"item_rating",
+        @"shop_detailed"
+    ];
+
+    NSUInteger detailScore = 0;
+    for (NSString *key in detailKeys) {
+        id value = SHPFindValueForKeys(object, [NSSet setWithObject:key.lowercaseString]);
+        if (!value || value == [NSNull null]) {
+            continue;
+        }
+        if ([value isKindOfClass:[NSArray class]] && [(NSArray *)value count] == 0) {
+            continue;
+        }
+        if ([value isKindOfClass:[NSDictionary class]] && [(NSDictionary *)value count] == 0) {
+            continue;
+        }
+        if ([value isKindOfClass:[NSString class]] && ![(NSString *)value length]) {
+            continue;
+        }
+        detailScore += 1;
+    }
+
+    return detailScore >= 3;
+}
+
+static BOOL SHPObjectMatchesPDPTask(id object, NSString *shopID, NSString *itemID) {
+    if (!shopID.length || !itemID.length) {
+        return NO;
+    }
+    NSDictionary *mainIDs = SHPExtractPDPMainIDs(object);
+    NSString *foundItem = mainIDs[@"item_id"];
+    NSString *foundShop = mainIDs[@"shop_id"];
+    return [foundItem isEqualToString:itemID] && [foundShop isEqualToString:shopID] && SHPObjectHasPDPDetail(object);
+}
+
+static id SHPFindMatchingPDPObject(id object, NSString *shopID, NSString *itemID, NSUInteger depth) {
+    if (!object || object == [NSNull null] || depth > 8) {
+        return nil;
+    }
+    if (SHPObjectMatchesPDPTask(object, shopID, itemID)) {
+        return object;
+    }
+    if ([object isKindOfClass:[NSDictionary class]]) {
+        for (id value in [(NSDictionary *)object allValues]) {
+            id found = SHPFindMatchingPDPObject(value, shopID, itemID, depth + 1);
+            if (found) {
+                return found;
+            }
+        }
+    } else if ([object isKindOfClass:[NSArray class]]) {
+        for (id value in (NSArray *)object) {
+            id found = SHPFindMatchingPDPObject(value, shopID, itemID, depth + 1);
+            if (found) {
+                return found;
+            }
+        }
+    }
+    return nil;
+}
+
 static NSData *SHPGzipData(NSData *data) {
     if (!data.length) {
         return nil;
@@ -2933,48 +3003,7 @@ static NSData *SHPGzipData(NSData *data) {
         }
     }
 
-    NSDictionary *mainIDs = SHPExtractPDPMainIDs(object);
-    NSString *foundItem = mainIDs[@"item_id"];
-    NSString *foundShop = mainIDs[@"shop_id"];
-    if (![foundItem isEqualToString:itemID] || ![foundShop isEqualToString:shopID]) {
-        return NO;
-    }
-
-    NSUInteger detailScore = 0;
-
-    NSArray<NSString *> *detailKeys = @[
-        @"models",
-        @"tier_variations",
-        @"price",
-        @"price_min",
-        @"price_max",
-        @"stock",
-        @"description",
-        @"images",
-        @"item_rating",
-        @"shop_detailed"
-    ];
-
-    for (NSString *key in detailKeys) {
-        id value = SHPFindValueForKeys(object, [NSSet setWithObject:key.lowercaseString]);
-        if (!value || value == [NSNull null]) {
-            continue;
-        }
-
-        if ([value isKindOfClass:[NSArray class]] && [(NSArray *)value count] == 0) {
-            continue;
-        }
-        if ([value isKindOfClass:[NSDictionary class]] && [(NSDictionary *)value count] == 0) {
-            continue;
-        }
-        if ([value isKindOfClass:[NSString class]] && ![(NSString *)value length]) {
-            continue;
-        }
-
-        detailScore += 1;
-    }
-
-    return detailScore >= 3;
+    return SHPFindMatchingPDPObject(object, shopID, itemID, 0) != nil;
 }
 
 - (void)submitCapturedJSONString:(NSString *)jsonString sourceURL:(NSString *)sourceURL {
@@ -3170,22 +3199,22 @@ static NSData *SHPGzipData(NSData *data) {
             return;
         }
 
-        if (self.currentTask.itemID.length && ![urlString containsString:self.currentTask.itemID]) {
-            return;
-        }
-        if (self.currentTask.shopID.length && ![urlString containsString:self.currentTask.shopID]) {
-            return;
-        }
-
-        NSDictionary *mainIDs = SHPExtractPDPMainIDs(jsonObject);
-        NSString *foundItem = mainIDs[@"item_id"];
-        NSString *foundShop = mainIDs[@"shop_id"];
-        if (![foundItem isEqualToString:self.currentTask.itemID] || ![foundShop isEqualToString:self.currentTask.shopID]) {
+        id matchedPDPObject = SHPFindMatchingPDPObject(jsonObject, self.currentTask.shopID, self.currentTask.itemID, 0);
+        if (!matchedPDPObject) {
+            NSDictionary *mainIDs = SHPExtractPDPMainIDs(jsonObject);
+            NSString *foundItem = mainIDs[@"item_id"];
+            NSString *foundShop = mainIDs[@"shop_id"];
             [self appendLog:[NSString stringWithFormat:@"PDP涓诲晢鍝佷笉鍖归厤 %@/%@", foundShop ?: @"-", foundItem ?: @"-"]];
             return;
         }
+        if (matchedPDPObject != jsonObject) {
+            NSString *matchedJSONString = SHPJSONStringFromObject(matchedPDPObject);
+            if (matchedJSONString.length) {
+                jsonString = matchedJSONString;
+            }
+        }
 
-        if (jsonString.length < 10240) {
+        if (matchedPDPObject == jsonObject && jsonString.length < 10240) {
             NSInteger errorCode = 0;
             NSNumber *errorVal = jsonDict[@"error"];
             if ([errorVal isKindOfClass:[NSNumber class]]) {
@@ -3231,11 +3260,14 @@ static NSData *SHPGzipData(NSData *data) {
         return;
     }
 
-    if (![self currentTaskMatchesJSONObject:object rawData:rawData]) {
+    NSString *shopID = self.currentTask.shopID;
+    NSString *itemID = self.currentTask.itemID;
+    id matchedPDPObject = SHPFindMatchingPDPObject(object, shopID, itemID, 0);
+    if (!matchedPDPObject) {
         return;
     }
 
-    NSString *jsonString = SHPJSONStringFromObject(object);
+    NSString *jsonString = SHPJSONStringFromObject(matchedPDPObject);
     if (!jsonString.length && rawData.length) {
         jsonString = [[NSString alloc] initWithData:rawData encoding:NSUTF8StringEncoding];
     }
