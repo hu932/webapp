@@ -1847,7 +1847,7 @@ static NSData *SHPGzipData(NSData *data) {
         payload[@"act"] = action;
     }
     NSString *resolvedUsername = SHPStringValue(username) ?: SHPStringValue(self.usernameField.text) ?: [self savedUsername];
-    if (self.apiType == 2 && ![action isEqualToString:@"api2_login"]) {
+    if (self.apiType == 2 && [action isEqualToString:@"heartbeat"]) {
         NSString *api2Number = [self api2Number];
         if (api2Number.length) {
             resolvedUsername = api2Number;
@@ -1863,7 +1863,8 @@ static NSData *SHPGzipData(NSData *data) {
     if (self.groupID.length) {
         payload[@"group_id"] = self.groupID;
     }
-    payload[@"api_type"] = @(self.apiType == 2 ? 2 : 1);
+    NSInteger payloadApiType = [action isEqualToString:@"api1_login"] ? 1 : (self.apiType == 2 ? 2 : 1);
+    payload[@"api_type"] = @(payloadApiType);
     payload[@"client"] = @"ShopeeTaskHook";
     payload[@"platform"] = @"ios";
     payload[@"device_type"] = @"ios";
