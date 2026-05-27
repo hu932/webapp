@@ -1645,6 +1645,102 @@ $logUsername = (string)$logEntry['username'];
 $logRemarkMap = accountRemarkMap(readApi1AllowedAccounts($apiType === 2 ? $API2_NUMBERS_FILE : $API1_ACCOUNTS_FILE));
 $logEntry['account_remark'] = $logRemarkMap[$logUsername] ?? '';
 
+$plainInputData = json_decode($encryptedData, true);
+if (is_array($plainInputData)) {
+    $target = $TARGETS[$apiType];
+    $forwardHeaders = [];
+    $taskInfo = null;
+    $statsTaskId = '';
+
+    if ($apiType === 2) {
+        $username = (string)($input['username'] ?? '');
+        $groupId = (string)($input['group_id'] ?? '');
+        $taskInfo = $input['task_info'] ?? null;
+        if (!is_array($taskInfo)) {
+            $taskId = trim((string)($input['task_id'] ?? $input['trace_id'] ?? ''));
+            $taskInfo = $taskId !== '' ? ['ID' => $taskId] : [];
+        }
+        if ($username === '' || $groupId === '' || !$taskInfo) {
+            $logEntry['status'] = 'plain_missing_fields';
+            $logEntry['timing_ms']['total'] = elapsedMs($requestStart);
+            appendLog($LOG_FILE, $logEntry, $MAX_LOGS);
+            jsonResp(['ok' => false, 'msg' => 'plain api2 missing username/group_id/task_info']);
+        }
+        $payload = api2ForwardPayload($username, $groupId, $taskInfo, $plainInputData);
+        $logEntry['username'] = $username;
+        $logEntry['group_id'] = $groupId;
+        $logEntry['task_info'] = $taskInfo;
+        $logEntry['source'] = 'plain_data';
+        $statsTaskId = (string)($taskInfo['ID'] ?? '');
+    } else {
+        $taskUrl = (string)($input['url'] ?? '');
+        if ($taskUrl === '') {
+            $itemId = (string)($input['item_id'] ?? '');
+            $shopId = (string)($input['shop_id'] ?? '');
+            if ($itemId !== '' && $shopId !== '') {
+                $taskUrl = 'https://shopee.tw/api/v4/pdp/get_pc?display_model_id=0&item_id=' . rawurlencode($itemId) . '&model_selection_logic=3&shop_id=' . rawurlencode($shopId) . '&tz_offset_in_minutes=480&detail_level=0';
+            }
+        }
+        if ($taskUrl === '') {
+            $logEntry['status'] = 'plain_missing_url';
+            $logEntry['timing_ms']['total'] = elapsedMs($requestStart);
+            appendLog($LOG_FILE, $logEntry, $MAX_LOGS);
+            jsonResp(['ok' => false, 'msg' => 'plain api1 missing url']);
+        }
+        $payload = [
+            'appVersion' => (string)($input['appVersion'] ?? 'vv2'),
+            'url' => $taskUrl,
+            'result' => $encryptedData,
+        ];
+        $api1InputToken = trim((string)($input['auth_token'] ?? $input['token'] ?? ''));
+        if ($api1InputToken !== '') {
+            $forwardHeaders[] = 'Authorization: Bearer ' . $api1InputToken;
+        }
+        $logEntry['task_url'] = $taskUrl;
+        $logEntry['source'] = 'plain_data';
+    }
+
+    $stageMark = microtime(true);
+    $forwardBody = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $logEntry['timing_ms']['build_forward_body'] = durationMs($stageMark, microtime(true));
+    $stageMark = microtime(true);
+    $result = forwardToServer($target['url'], (string)$forwardBody, $target['gzip'], $forwardHeaders);
+    $serverResp = json_decode((string)$result['response'], true);
+    $forwardMs = durationMs($stageMark, microtime(true));
+    $isForwardSuccess = $apiType === 1 ? api1ForwardSuccess($serverResp) : api2ForwardSuccess($serverResp);
+    $logEntry['forward_url'] = $target['url'];
+    $logEntry['forward_attempts'] = [forwardAttemptSummary($result, $serverResp) + ['attempt' => 1, 'total_ms' => $forwardMs]];
+    $logEntry['timing_ms']['forward'] = $forwardMs;
+    $logEntry['status'] = $result['error'] ? 'forward_fail' : ($isForwardSuccess ? 'success' : 'task_server_error');
+    $logEntry['response'] = compactLogResponse($serverResp ?? $result['response'], $MAX_LOG_RESPONSE_BYTES);
+    $logEntry['timing_ms']['total'] = elapsedMs($requestStart);
+    if ($result['error']) $logEntry['error'] = $result['error'];
+    $uploadId = date('Ymd_His') . '_' . substr(md5($rawBody . '|plain_upload'), 0, 8);
+    $logEntry['upload_id'] = $uploadId;
+    $uploadDetail = [
+        'time' => date('Y-m-d H:i:s'),
+        'api_type' => $apiType,
+        'source' => 'plain_data',
+        'target_url' => $target['url'],
+        'method' => 'POST',
+        'content_encoding' => $target['gzip'] ? 'gzip' : 'identity',
+        'request_body' => $payload,
+        'http_code' => $result['http_code'] ?? 0,
+        'response_json' => is_array($serverResp) ? $serverResp : null,
+        'response_raw' => $result['response'],
+        'error' => $result['error'],
+    ];
+    appendLog($LOG_FILE, $logEntry, $MAX_LOGS);
+    recordStats($STATS_DIR, $input, $apiType, $logEntry['status'], $statsTaskId);
+    if ($logEntry['status'] !== 'success' || $SAVE_SUCCESS_UPLOAD_DUMPS) {
+        saveUploadDump($uploadId, $uploadDetail);
+    }
+    if ($result['error']) {
+        jsonResp(['ok' => false, 'msg' => 'forward failed: ' . $result['error']]);
+    }
+    jsonResp($serverResp ?: ['ok' => false, 'msg' => 'task server response invalid', 'raw' => $result['response']]);
+}
+
 $stageMark = microtime(true);
 // 解密
 $plain = aesDecrypt($encryptedData, $AES_KEY);
