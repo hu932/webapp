@@ -396,6 +396,13 @@ static NSDictionary<NSString *, NSString *> *SHPExtractIDsFromString(NSString *t
         result[@"item_id"] = itemFromProductURL;
     }
 
+    NSString *shopFromCanonicalURL = SHPRegexFirstMatch(text, @"-i\\.(\\d+)\\.(\\d+)", 1);
+    NSString *itemFromCanonicalURL = SHPRegexFirstMatch(text, @"-i\\.(\\d+)\\.(\\d+)", 2);
+    if (shopFromCanonicalURL.length && itemFromCanonicalURL.length) {
+        result[@"shop_id"] = shopFromCanonicalURL;
+        result[@"item_id"] = itemFromCanonicalURL;
+    }
+
     NSString *itemQuery = SHPRegexFirstMatch(text, @"(?:item_id|itemid)=([0-9]+)", 1);
     NSString *shopQuery = SHPRegexFirstMatch(text, @"(?:shop_id|shopid)=([0-9]+)", 1);
 
@@ -435,7 +442,7 @@ static NSString *SHPBuildProductURL(NSString *shopID, NSString *itemID) {
     if (!shopID.length || !itemID.length) {
         return nil;
     }
-    return [NSString stringWithFormat:@"https://shopee.tw/product/%@/%@", shopID, itemID];
+    return [NSString stringWithFormat:@"https://shopee.tw/product-i.%@.%@", shopID, itemID];
 }
 
 static NSString *SHPBuildPDPURL(NSString *shopID, NSString *itemID) {
@@ -443,6 +450,33 @@ static NSString *SHPBuildPDPURL(NSString *shopID, NSString *itemID) {
         return nil;
     }
     return [NSString stringWithFormat:@"https://shopee.tw/api/v4/pdp/get_pc?display_model_id=0&item_id=%@&model_selection_logic=3&shop_id=%@&tz_offset_in_minutes=480&detail_level=0", itemID, shopID];
+}
+
+static NSDictionary<NSString *, NSString *> *SHPExtractPDPMainIDs(id object) {
+    NSDictionary *root = SHPDictionaryValue(object);
+    if (!root.count) {
+        return @{};
+    }
+
+    NSDictionary *data = SHPDictionaryValue(root[@"data"]) ?: root;
+    NSDictionary *itemData = SHPDictionaryValue(data[@"item_data"]) ?: SHPDictionaryValue(data[@"item"]);
+    if (!itemData.count) {
+        itemData = SHPDictionaryValue(root[@"item_data"]) ?: SHPDictionaryValue(root[@"item"]);
+    }
+
+    NSString *itemID = SHPStringValue(itemData[@"itemid"]) ?: SHPStringValue(itemData[@"item_id"]) ?: SHPStringValue(itemData[@"itemId"]);
+    NSString *shopID = SHPStringValue(itemData[@"shopid"]) ?: SHPStringValue(itemData[@"shop_id"]) ?: SHPStringValue(itemData[@"shopId"]);
+    if (!itemID.length) {
+        itemID = SHPStringValue(data[@"itemid"]) ?: SHPStringValue(data[@"item_id"]) ?: SHPStringValue(data[@"itemId"]);
+    }
+    if (!shopID.length) {
+        shopID = SHPStringValue(data[@"shopid"]) ?: SHPStringValue(data[@"shop_id"]) ?: SHPStringValue(data[@"shopId"]);
+    }
+
+    if (!itemID.length || !shopID.length) {
+        return @{};
+    }
+    return @{@"item_id": itemID, @"shop_id": shopID};
 }
 
 static NSString *SHPJSONStringFromObject(id object) {
@@ -2210,7 +2244,9 @@ static NSData *SHPGzipData(NSData *data) {
         }
     }
 
-    if (!task.productURL.length) {
+    if (task.shopID.length && task.itemID.length) {
+        task.productURL = SHPBuildProductURL(task.shopID, task.itemID);
+    } else if (!task.productURL.length) {
         task.productURL = SHPBuildProductURL(task.shopID, task.itemID);
     }
 
@@ -2257,7 +2293,9 @@ static NSData *SHPGzipData(NSData *data) {
         task.shopID = ids[@"shop_id"];
         task.itemID = ids[@"item_id"];
     }
-    if (!task.productURL.length) {
+    if (task.shopID.length && task.itemID.length) {
+        task.productURL = SHPBuildProductURL(task.shopID, task.itemID);
+    } else if (!task.productURL.length) {
         task.productURL = SHPBuildProductURL(task.shopID, task.itemID);
     }
     task.pdpURL = SHPBuildPDPURL(task.shopID, task.itemID);
@@ -2771,10 +2809,9 @@ static NSData *SHPGzipData(NSData *data) {
         [routes addObject:route];
     }
     if (self.currentTask.shopID.length && self.currentTask.itemID.length) {
-        [routes addObject:[NSString stringWithFormat:@"rn/PRODUCT_PAGE?item_id=%@&shop_id=%@", self.currentTask.itemID, self.currentTask.shopID]];
-        [routes addObject:[NSString stringWithFormat:@"rn/PRODUCT_PAGE?good_id=%@&shop_id=%@", self.currentTask.itemID, self.currentTask.shopID]];
+        [routes addObject:[NSString stringWithFormat:@"rn/PRODUCT_PAGE?shop_id=%@&item_id=%@", self.currentTask.shopID, self.currentTask.itemID]];
         [routes addObject:[NSString stringWithFormat:@"rn/PRODUCT_PAGE?shopid=%@&itemid=%@", self.currentTask.shopID, self.currentTask.itemID]];
-        [routes addObject:[NSString stringWithFormat:@"PRODUCT_PAGE?itemid=%@&shopid=%@", self.currentTask.itemID, self.currentTask.shopID]];
+        [routes addObject:[NSString stringWithFormat:@"PRODUCT_PAGE?shopid=%@&itemid=%@", self.currentTask.shopID, self.currentTask.itemID]];
     }
 
     for (NSString *candidateRoute in routes) {
@@ -2805,7 +2842,7 @@ static NSData *SHPGzipData(NSData *data) {
 
     NSString *route = nil;
     if (self.currentTask.itemID.length && self.currentTask.shopID.length) {
-        route = [NSString stringWithFormat:@"rn/PRODUCT_PAGE?itemid=%@&shopid=%@", self.currentTask.itemID, self.currentTask.shopID];
+        route = [NSString stringWithFormat:@"rn/PRODUCT_PAGE?shop_id=%@&item_id=%@", self.currentTask.shopID, self.currentTask.itemID];
     }
 
     [self popToRootViewControllerIfNeeded];
@@ -2895,15 +2932,10 @@ static NSData *SHPGzipData(NSData *data) {
         }
     }
 
-    NSString *foundItem = SHPFindStringForKeys(object, @[@"item_id", @"itemid", @"itemId"]);
-    NSString *foundShop = SHPFindStringForKeys(object, @[@"shop_id", @"shopid", @"shopId"]);
-    BOOL idMatched = [foundItem isEqualToString:itemID] && [foundShop isEqualToString:shopID];
-
-    if (!idMatched && rawString.length) {
-        idMatched = [rawString containsString:itemID] && [rawString containsString:shopID];
-    }
-
-    if (!idMatched) {
+    NSDictionary *mainIDs = SHPExtractPDPMainIDs(object);
+    NSString *foundItem = mainIDs[@"item_id"];
+    NSString *foundShop = mainIDs[@"shop_id"];
+    if (![foundItem isEqualToString:itemID] || ![foundShop isEqualToString:shopID]) {
         return NO;
     }
 
@@ -3141,6 +3173,14 @@ static NSData *SHPGzipData(NSData *data) {
             return;
         }
         if (self.currentTask.shopID.length && ![urlString containsString:self.currentTask.shopID]) {
+            return;
+        }
+
+        NSDictionary *mainIDs = SHPExtractPDPMainIDs(jsonObject);
+        NSString *foundItem = mainIDs[@"item_id"];
+        NSString *foundShop = mainIDs[@"shop_id"];
+        if (![foundItem isEqualToString:self.currentTask.itemID] || ![foundShop isEqualToString:self.currentTask.shopID]) {
+            [self appendLog:[NSString stringWithFormat:@"PDP涓诲晢鍝佷笉鍖归厤 %@/%@", foundShop ?: @"-", foundItem ?: @"-"]];
             return;
         }
 
