@@ -3207,14 +3207,15 @@ static NSData *SHPGzipData(NSData *data) {
             [self appendLog:[NSString stringWithFormat:@"PDP涓诲晢鍝佷笉鍖归厤 %@/%@", foundShop ?: @"-", foundItem ?: @"-"]];
             return;
         }
+        NSString *submitJSONString = jsonString;
         if (matchedPDPObject != jsonObject) {
             NSString *matchedJSONString = SHPJSONStringFromObject(matchedPDPObject);
             if (matchedJSONString.length) {
-                jsonString = matchedJSONString;
+                submitJSONString = matchedJSONString;
             }
         }
 
-        if (matchedPDPObject == jsonObject && jsonString.length < 10240) {
+        if (matchedPDPObject == jsonObject && submitJSONString.length < 10240) {
             NSInteger errorCode = 0;
             NSNumber *errorVal = jsonDict[@"error"];
             if ([errorVal isKindOfClass:[NSNumber class]]) {
@@ -3242,7 +3243,7 @@ static NSData *SHPGzipData(NSData *data) {
         self.consecutivePDPFailures = 0;
         self.waitingForPDP = NO;
         [self appendLog:@"获取到数据,提交"];
-        [self submitCapturedJSONString:jsonString sourceURL:urlString];
+        [self submitCapturedJSONString:submitJSONString sourceURL:urlString];
     });
 }
 
