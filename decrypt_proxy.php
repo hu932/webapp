@@ -689,9 +689,9 @@ function durationMs(float $start, float $end): int {
 
 function api2ForwardPayload(string $username, string $groupId, array $taskInfo, array $actualData): array {
     return [
-        "\xE9\x90\xA2\xE3\x84\xA6\xE5\x9F\x9B\xE9\x8D\x9A\x3F" => $username,
-        "\xE7\xBC\x81\xE5\x87\xA6\x44" => $groupId,
-        "\xE6\xB5\xA0\xE8\xAF\xB2\xE5\xA7\x9F\xE9\x8F\x81\xE7\x89\x88\xE5\xB5\x81" => $taskInfo,
+        "\u{7528}\u{6237}\u{540d}" => $username,
+        "\u{7ec4}ID" => $groupId,
+        "\u{4efb}\u{52a1}\u{6570}\u{636e}" => $taskInfo,
         'data' => $actualData,
     ];
 }
@@ -1817,6 +1817,9 @@ if ($apiType === 2) {
     $taskInfo = $input['任务数据'] ?? null;
     if (!$username || !$groupId || !$taskInfo) jsonResp(['ok' => false, 'msg' => '接口2缺少字段']);
 
+    if (!$username && !empty($input['用户名'])) $username = $input['用户名'];
+    if (!$groupId && !empty($input['组ID'])) $groupId = $input['组ID'];
+    if (!$taskInfo && !empty($input['任务数据'])) $taskInfo = $input['任务数据'];
     if (!$username && !empty($input['username'])) $username = $input['username'];
     if (!$groupId && !empty($input['group_id'])) $groupId = $input['group_id'];
     if (!$taskInfo && !empty($input['task_info'])) $taskInfo = $input['task_info'];
