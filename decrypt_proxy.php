@@ -721,8 +721,15 @@ function api2ForwardSuccess($serverResp): bool {
     $ok = $serverResp['ok'] ?? null;
     if ($ok === true || $ok === 1 || $ok === '1') return true;
     if (is_string($ok) && strtolower(trim($ok)) === 'true') return true;
-    $code = (string)($serverResp['code'] ?? '');
-    return $code === '200' || strcasecmp($code, 'SUCCESS') === 0;
+    $code = strtoupper(trim((string)($serverResp['code'] ?? '')));
+    if ($code === '200' || $code === 'SUCCESS') return true;
+    $data = $serverResp['data'] ?? null;
+    if (is_array($data)) {
+        $dataCode = strtoupper(trim((string)($data['code'] ?? '')));
+        $dataMsg = $data['msg'] ?? null;
+        if ($dataCode === 'SUCCESS' && ($dataMsg === null || $dataMsg === '')) return true;
+    }
+    return false;
 }
 
 function forwardAttemptSummary(array $result, $serverResp): array {
@@ -1381,12 +1388,9 @@ if ($postAct === 'api1_submit') {
         $isForwardSuccess = false;
     }
     $respData = is_array($serverResp['data'] ?? null) ? $serverResp['data'] : null;
-    $serverTaskId = is_array($respData) ? trim((string)($respData['task_id'] ?? $respData['trace_id'] ?? $respData['id'] ?? '')) : '';
+    $serverTaskId = is_array($respData) ? trim((string)($respData['task_id'] ?? $respData['taskId'] ?? $respData['trace_id'] ?? $respData['traceId'] ?? $respData['id'] ?? '')) : '';
     $serverReceivedId = is_array($respData) ? trim((string)($respData['submit_id'] ?? '')) : '';
     $proxyContextMatch = $taskId !== '' ? (($serverTaskId !== '' && $serverTaskId === $taskId) || ($serverReceivedId !== '' && $serverReceivedId === $submitId)) : true;
-    if (!$proxyContextMatch) {
-        $isForwardSuccess = false;
-    }
 
     $uploadId = date('Ymd_His') . '_' . substr(md5($rawBody . '|ios_submit'), 0, 8);
     $logEntry = [
@@ -1454,7 +1458,7 @@ if ($postAct === 'api1_submit') {
     if ($result['error']) {
         jsonResp(['ok' => false, 'msg' => '转发失败: ' . $result['error']]);
     }
-    if ($serverResp && $proxyContextMatch) {
+    if ($serverResp) {
         $serverResp['_proxy'] = [
             'submit_id' => $submitId,
             'task_id' => $taskId,
@@ -1463,20 +1467,6 @@ if ($postAct === 'api1_submit') {
             'context_match' => $proxyContextMatch,
         ];
         jsonResp($serverResp);
-    }
-    if ($serverResp && !$proxyContextMatch) {
-        jsonResp([
-            'ok' => false,
-            'msg' => '上游未返回当前任务回执',
-            'upstream' => $serverResp,
-            '_proxy' => [
-                'submit_id' => $submitId,
-                'task_id' => $taskId,
-                'server_task_id' => $serverTaskId,
-                'server_submit_id' => $serverReceivedId,
-                'context_match' => false,
-            ],
-        ]);
     }
     jsonResp(['ok' => false, 'msg' => '任务服务器响应异常', 'raw' => $result['response']]);
 }
@@ -1840,7 +1830,6 @@ if ($apiType === 2) {
         '用户名' => $username, '组ID' => $groupId,
         '任务数据' => $taskInfo, 'data' => $actualData,
     ];
-    $payload = api2ForwardPayload((string)$username, (string)$groupId, is_array($taskInfo) ? $taskInfo : [], $actualData);
     $logEntry['forward_data_type'] = gettype($payload['data']);
     $logEntry['forward_data_keys'] = is_array($payload['data']) ? array_slice(array_keys($payload['data']), 0, 30) : null;
     $logEntry['forward_has_response_body_raw'] = is_string($responseBodyRaw) && $responseBodyRaw !== '';

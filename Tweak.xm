@@ -3106,12 +3106,6 @@ static NSData *SHPGzipData(NSData *data) {
             }
         }
 
-        if (!proxyContextMatch) {
-            [self appendLog:@"提交失败:上游回执上下文不匹配"];
-            [self finishCurrentTaskAndContinueWithSuccess:NO reason:nil];
-            return;
-        }
-
         [self appendLog:@"提交确认成功"];
         [self finishCurrentTaskAndContinueWithSuccess:YES reason:nil];
     }];
