@@ -2296,7 +2296,7 @@ static NSData *SHPGzipData(NSData *data) {
         NSString *api2Number = [self api2Number];
         NSString *api2Use = [NSString stringWithFormat:@"%@_%@", api2Group, (api2Number.length ? api2Number : kSHPApi2FixedUsername)];
         [self appendLog:@"接口2取任务..."];
-        [self sendGzippedJSONRequestToURL:kSHPApi2TakeTaskURL body:@{@"info": @"\u9359\u7248\u5495", @"use": api2Use} completion:^(NSInteger statusCode, id jsonObject, NSData *data, NSError *error) {
+        [self sendGzippedJSONRequestToURL:kSHPApi2TakeTaskURL body:@{@"info": @"\u53f0\u6e7e", @"use": api2Use} completion:^(NSInteger statusCode, id jsonObject, NSData *data, NSError *error) {
             self.requestInFlight = NO;
             if (error) {
                 [self appendLog:[NSString stringWithFormat:@"接口2取任务失败:%@", error.localizedDescription ?: @"err"]];
