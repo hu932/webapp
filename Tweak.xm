@@ -442,7 +442,7 @@ static NSString *SHPBuildProductURL(NSString *shopID, NSString *itemID) {
     if (!shopID.length || !itemID.length) {
         return nil;
     }
-    return [NSString stringWithFormat:@"https://shopee.tw/product-i.%@.%@", shopID, itemID];
+    return [NSString stringWithFormat:@"https://shopee.tw/product/%@/%@", shopID, itemID];
 }
 
 static NSString *SHPBuildPDPURL(NSString *shopID, NSString *itemID) {
@@ -2809,9 +2809,10 @@ static NSData *SHPGzipData(NSData *data) {
         [routes addObject:route];
     }
     if (self.currentTask.shopID.length && self.currentTask.itemID.length) {
-        [routes addObject:[NSString stringWithFormat:@"rn/PRODUCT_PAGE?shop_id=%@&item_id=%@", self.currentTask.shopID, self.currentTask.itemID]];
+        [routes addObject:[NSString stringWithFormat:@"rn/PRODUCT_PAGE?item_id=%@&shop_id=%@", self.currentTask.itemID, self.currentTask.shopID]];
+        [routes addObject:[NSString stringWithFormat:@"rn/PRODUCT_PAGE?good_id=%@&shop_id=%@", self.currentTask.itemID, self.currentTask.shopID]];
         [routes addObject:[NSString stringWithFormat:@"rn/PRODUCT_PAGE?shopid=%@&itemid=%@", self.currentTask.shopID, self.currentTask.itemID]];
-        [routes addObject:[NSString stringWithFormat:@"PRODUCT_PAGE?shopid=%@&itemid=%@", self.currentTask.shopID, self.currentTask.itemID]];
+        [routes addObject:[NSString stringWithFormat:@"PRODUCT_PAGE?itemid=%@&shopid=%@", self.currentTask.itemID, self.currentTask.shopID]];
     }
 
     for (NSString *candidateRoute in routes) {
@@ -2842,7 +2843,7 @@ static NSData *SHPGzipData(NSData *data) {
 
     NSString *route = nil;
     if (self.currentTask.itemID.length && self.currentTask.shopID.length) {
-        route = [NSString stringWithFormat:@"rn/PRODUCT_PAGE?shop_id=%@&item_id=%@", self.currentTask.shopID, self.currentTask.itemID];
+        route = [NSString stringWithFormat:@"rn/PRODUCT_PAGE?itemid=%@&shopid=%@", self.currentTask.itemID, self.currentTask.shopID];
     }
 
     [self popToRootViewControllerIfNeeded];
