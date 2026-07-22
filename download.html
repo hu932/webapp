@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ajie - Download</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
+    background: #0a0e1a;
+    color: #e0eef0;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  .bg-glow {
+    position: fixed; top: -40%; left: -20%; width: 80%; height: 80%;
+    background: radial-gradient(circle, rgba(40,180,170,0.08) 0%, transparent 70%);
+    pointer-events: none; z-index: 0;
+  }
+  .bg-glow-2 {
+    position: fixed; bottom: -30%; right: -15%; width: 60%; height: 60%;
+    background: radial-gradient(circle, rgba(60,100,220,0.06) 0%, transparent 70%);
+    pointer-events: none; z-index: 0;
+  }
+  .container {
+    position: relative; z-index: 1;
+    max-width: 720px; margin: 0 auto; padding: 60px 24px 80px;
+  }
+  .header {
+    text-align: center; margin-bottom: 56px;
+  }
+  .logo {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 72px; height: 72px; border-radius: 20px;
+    background: linear-gradient(135deg, #1a3a4a 0%, #0d1f30 100%);
+    border: 2px solid rgba(66,190,186,0.4);
+    margin-bottom: 20px; font-size: 32px;
+    box-shadow: 0 8px 32px rgba(40,180,170,0.15);
+  }
+  .header h1 {
+    font-size: 28px; font-weight: 700;
+    background: linear-gradient(135deg, #e0f4f2 0%, #42beba 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    letter-spacing: -0.5px;
+  }
+  .header p {
+    color: #7a9aa8; font-size: 15px; margin-top: 8px;
+  }
+  .version-badge {
+    display: inline-block; margin-top: 12px; padding: 4px 14px;
+    background: rgba(66,190,186,0.1); border: 1px solid rgba(66,190,186,0.25);
+    border-radius: 20px; font-size: 13px; color: #42beba;
+    font-weight: 500;
+  }
+  .cards { display: flex; flex-direction: column; gap: 20px; }
+  .card {
+    background: linear-gradient(145deg, rgba(18,24,40,0.95) 0%, rgba(12,16,28,0.98) 100%);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 20px; padding: 32px;
+    transition: all 0.3s ease;
+    position: relative; overflow: hidden;
+  }
+  .card::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    border-radius: 20px 20px 0 0;
+  }
+  .card-rootful::before {
+    background: linear-gradient(90deg, #f59e0b, #f97316);
+  }
+  .card-rootless::before {
+    background: linear-gradient(90deg, #42beba, #3b82f6);
+  }
+  .card:hover {
+    border-color: rgba(255,255,255,0.12);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+  }
+  .card-top {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .card-icon {
+    width: 48px; height: 48px; border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; flex-shrink: 0;
+  }
+  .card-rootful .card-icon {
+    background: linear-gradient(135deg, rgba(245,158,11,0.15), rgba(249,115,22,0.1));
+    border: 1px solid rgba(245,158,11,0.25);
+  }
+  .card-rootless .card-icon {
+    background: linear-gradient(135deg, rgba(66,190,186,0.15), rgba(59,130,246,0.1));
+    border: 1px solid rgba(66,190,186,0.25);
+  }
+  .card-tag {
+    padding: 4px 12px; border-radius: 8px; font-size: 12px;
+    font-weight: 600; letter-spacing: 0.5px;
+  }
+  .card-rootful .card-tag {
+    background: rgba(245,158,11,0.12); color: #f59e0b;
+  }
+  .card-rootless .card-tag {
+    background: rgba(66,190,186,0.12); color: #42beba;
+  }
+  .card h2 {
+    font-size: 20px; font-weight: 600; margin-bottom: 6px;
+    color: #f0f6f7;
+  }
+  .card .subtitle {
+    font-size: 14px; color: #6a8a98; margin-bottom: 18px;
+  }
+  .info-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    margin-bottom: 24px;
+  }
+  .info-item {
+    background: rgba(255,255,255,0.03); border-radius: 10px; padding: 12px 14px;
+  }
+  .info-item .label {
+    font-size: 11px; color: #5a7a88; text-transform: uppercase;
+    letter-spacing: 0.8px; margin-bottom: 4px;
+  }
+  .info-item .value {
+    font-size: 14px; font-weight: 500; color: #c0dce2;
+  }
+  .btn-download {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    width: 100%; padding: 14px 24px; border: none; border-radius: 14px;
+    font-size: 16px; font-weight: 600; cursor: pointer;
+    transition: all 0.25s ease; text-decoration: none;
+    letter-spacing: 0.3px;
+  }
+  .card-rootful .btn-download {
+    background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
+    color: #1a0a00;
+    box-shadow: 0 4px 20px rgba(245,158,11,0.25);
+  }
+  .card-rootful .btn-download:hover {
+    box-shadow: 0 6px 28px rgba(245,158,11,0.4);
+    transform: translateY(-1px);
+  }
+  .card-rootless .btn-download {
+    background: linear-gradient(135deg, #42beba 0%, #3b82f6 100%);
+    color: #001a1a;
+    box-shadow: 0 4px 20px rgba(66,190,186,0.25);
+  }
+  .card-rootless .btn-download:hover {
+    box-shadow: 0 6px 28px rgba(66,190,186,0.4);
+    transform: translateY(-1px);
+  }
+  .btn-download svg {
+    width: 20px; height: 20px;
+  }
+  .note {
+    margin-top: 40px; padding: 20px 24px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 16px;
+  }
+  .note h3 {
+    font-size: 14px; font-weight: 600; color: #8ab0bc; margin-bottom: 12px;
+  }
+  .note ul {
+    list-style: none; padding: 0;
+  }
+  .note li {
+    position: relative; padding-left: 18px; font-size: 13px;
+    color: #5a7a88; line-height: 1.8;
+  }
+  .note li::before {
+    content: ""; position: absolute; left: 0; top: 9px;
+    width: 6px; height: 6px; border-radius: 50%;
+    background: rgba(66,190,186,0.4);
+  }
+  .footer {
+    text-align: center; margin-top: 48px;
+    font-size: 12px; color: #3a5a68;
+  }
+  @media (max-width: 480px) {
+    .container { padding: 40px 16px 60px; }
+    .card { padding: 24px 20px; }
+    .info-grid { grid-template-columns: 1fr; }
+    .header h1 { font-size: 24px; }
+  }
+</style>
+</head>
+<body>
+<div class="bg-glow"></div>
+<div class="bg-glow-2"></div>
+<div class="container">
+  <div class="header">
+    <div class="logo">&#9881;</div>
+    <h1>Ajie Shopee</h1>
+    <p>Shopee Task Helper for Jailbroken iOS</p>
+    <span class="version-badge">v0.1.0 &middot; arm64 / arm64e</span>
+  </div>
+
+  <div class="cards">
+
+    <div class="card card-rootful">
+      <div class="card-top">
+        <div class="card-icon">&#128274;</div>
+        <span class="card-tag">ROOTFUL</span>
+      </div>
+      <h2>iOS 14 &mdash; Rootful</h2>
+      <p class="subtitle">unc0ver / checkra1n / palera1n rootful</p>
+      <div class="info-grid">
+        <div class="info-item">
+          <div class="label">iOS</div>
+          <div class="value">14.0 &ndash; 14.8.1</div>
+        </div>
+        <div class="info-item">
+          <div class="label">Architecture</div>
+          <div class="value">iphoneos-arm</div>
+        </div>
+        <div class="info-item">
+          <div class="label">Install Path</div>
+          <div class="value">/Library/</div>
+        </div>
+        <div class="info-item">
+          <div class="label">Depends</div>
+          <div class="value">mobilesubstrate</div>
+        </div>
+      </div>
+      <a class="btn-download" href="Ajie14有根.deb" download>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Ajie14有根.deb
+      </a>
+    </div>
+
+    <div class="card card-rootless">
+      <div class="card-top">
+        <div class="card-icon">&#128275;</div>
+        <span class="card-tag">ROOTLESS</span>
+      </div>
+      <h2>iOS 15 &ndash; 16 &mdash; Rootless</h2>
+      <p class="subtitle">Dopamine / palera1n rootless</p>
+      <div class="info-grid">
+        <div class="info-item">
+          <div class="label">iOS</div>
+          <div class="value">15.0 &ndash; 16.x</div>
+        </div>
+        <div class="info-item">
+          <div class="label">Architecture</div>
+          <div class="value">iphoneos-arm64</div>
+        </div>
+        <div class="info-item">
+          <div class="label">Install Path</div>
+          <div class="value">/var/jb/Library/</div>
+        </div>
+        <div class="info-item">
+          <div class="label">Depends</div>
+          <div class="value">mobilesubstrate</div>
+        </div>
+      </div>
+      <a class="btn-download" href="Ajie15-16无根.deb" download>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Ajie15-16无根.deb
+      </a>
+    </div>
+
+
+<div class="card card-rootless">
+      <div class="card-top">
+        <div class="card-icon">&#128275;</div>
+        <span class="card-tag">ROOTLESS</span>
+      </div>
+      <h2>iOS 屏蔽越狱  </h2>
+      <p class="subtitle">Dopamine / palera1n rootless</p>
+      <div class="info-grid">
+        <div class="info-item">
+          <div class="label">iOS</div>
+          <div class="value">15.0 &ndash; 16.x</div>
+        </div>
+        <div class="info-item">
+          <div class="label">Architecture</div>
+          <div class="value">iphoneos-arm64</div>
+        </div>
+        <div class="info-item">
+          <div class="label">Install Path</div>
+          <div class="value">/var/jb/Library/</div>
+        </div>
+        <div class="info-item">
+          <div class="label">Depends</div>
+          <div class="value">mobilesubstrate</div>
+        </div>
+      </div>
+      <a class="btn-download" href="屏蔽越狱.deb" download>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        屏蔽越狱.deb
+      </a>
+    </div>
+
+
+  </div>
+
+  <div class="note">
+    <h3>&#128221; Install</h3>
+    <ul>
+      <li>Filza: deb &rarr; Install</li>
+      <li>Terminal: dpkg -i &lt;file&gt;.deb &amp;&amp; sbreload</li>
+      <li>Sileo / Zebra: Open deb</li>
+    </ul>
+  </div>
+
+  <div class="footer">&copy; 2026 Ajie &middot; Ajie v0.1.0</div>
+</div>
+</body>
+</html>

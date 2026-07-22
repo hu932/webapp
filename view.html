@@ -1,0 +1,1751 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ajie 后台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--primary:#6366f1;--primary-light:#818cf8;--primary-dark:#4f46e5;--success:#10b981;--danger:#ef4444;--warning:#f59e0b;--info:#8b5cf6;--sidebar:#0f172a;--sidebar-w:250px;--header-h:60px;--bg:#f1f5f9;--card:#ffffff;--border:#e2e8f0;--text:#1e293b;--muted:#94a3b8;--font:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB",sans-serif;--radius:12px;--shadow:0 1px 3px rgba(0,0,0,.04),0 1px 2px rgba(0,0,0,.06);--shadow-md:0 4px 6px -1px rgba(0,0,0,.07),0 2px 4px -2px rgba(0,0,0,.05);--shadow-lg:0 10px 15px -3px rgba(0,0,0,.08),0 4px 6px -4px rgba(0,0,0,.04)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}::-webkit-scrollbar-thumb:hover{background:#94a3b8}
+
+/* Login */
+.login-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;background:#09111f;position:relative;overflow:hidden}
+.login-wrap::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,rgba(9,17,31,.94) 0%,rgba(9,17,31,.86) 34%,rgba(9,17,31,.56) 62%,rgba(9,17,31,.28) 100%),url('image-generate-f70447c5.png') right 4% center/clamp(420px,48vw,860px) auto no-repeat}
+.login-wrap::after{content:none}
+@keyframes loginIn{0%{opacity:0;transform:translateY(30px) scale(.96)}100%{opacity:1;transform:translateY(0) scale(1)}}
+.login-box{background:rgba(18,18,18,.92);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-radius:20px;padding:48px 40px;width:400px;box-shadow:0 25px 60px rgba(0,0,0,.5),0 0 0 1px rgba(180,150,80,.15),inset 0 1px 0 rgba(180,150,80,.08);position:relative;z-index:1;animation:loginIn .6s cubic-bezier(.16,1,.3,1)}
+.login-box h1{font-size:24px;text-align:center;margin-bottom:6px;color:#e8e0d0;font-weight:700;letter-spacing:-0.5px}
+.login-box p{text-align:center;color:#8a7e6e;margin-bottom:32px;font-size:14px;font-weight:400}
+.login-box input{width:100%;height:48px;border:1px solid rgba(180,150,80,.2);border-radius:10px;padding:0 16px;font-size:15px;margin-bottom:20px;transition:all .25s;background:rgba(255,255,255,.06);font-family:var(--font);color:#e8e0d0}
+.login-box input:focus{outline:none;border-color:rgba(180,150,80,.5);box-shadow:0 0 0 4px rgba(180,150,80,.1);background:rgba(255,255,255,.08)}
+.login-box input::placeholder{color:#6a6050}
+.login-box button{width:100%;height:48px;background:linear-gradient(135deg,#b4964f 0%,#8a7030 50%,#c4a660 100%);color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:600;cursor:pointer;transition:all .25s;font-family:var(--font);box-shadow:0 4px 14px rgba(180,150,80,.3);text-shadow:0 1px 2px rgba(0,0,0,.2)}
+.login-box button:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(180,150,80,.4)}
+.login-box button:active{transform:translateY(0)}
+
+
+/* Layout */
+.layout{display:flex;min-height:100vh}
+.sidebar{width:var(--sidebar-w);background:linear-gradient(180deg,#0f172a 0%,#1e293b 100%);position:fixed;top:0;left:0;bottom:0;z-index:100;overflow-y:auto;transition:width .3s cubic-bezier(.4,0,.2,1);border-right:1px solid rgba(255,255,255,.05)}
+.sidebar::-webkit-scrollbar{width:0}
+.sidebar-logo{height:60px;display:flex;align-items:center;padding:0 20px;color:#fff;font-size:15px;font-weight:700;letter-spacing:-0.3px;border-bottom:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.02);gap:12px}
+.sidebar-logo-icon{width:34px;height:34px;background:linear-gradient(135deg,var(--primary),var(--info));border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 4px 12px rgba(99,102,241,.3)}
+.sidebar-menu{padding:12px 10px 24px}
+.menu-item{display:flex;align-items:center;height:42px;padding:0 14px;color:rgba(255,255,255,.55);cursor:pointer;font-size:14px;font-weight:500;transition:all .2s;gap:12px;border-radius:8px;margin-bottom:2px}
+.menu-item:hover{color:rgba(255,255,255,.9);background:rgba(255,255,255,.06)}
+.menu-item.active{color:#fff;background:linear-gradient(135deg,rgba(99,102,241,.3),rgba(139,92,246,.2));box-shadow:0 2px 8px rgba(99,102,241,.15)}
+.menu-icon{width:20px;text-align:center;font-style:normal;font-size:15px;opacity:.8}
+.side-pet{display:none}
+.pet-hit{position:absolute;left:50%;bottom:18px;width:210px;height:300px;transform:translateX(-50%);pointer-events:auto;cursor:pointer}
+.pet-time{position:absolute;left:50%;bottom:298px;min-width:142px;padding:5px 10px;border-radius:999px;background:rgba(15,23,42,.72);border:1px solid rgba(147,197,253,.22);box-shadow:0 8px 24px rgba(15,23,42,.22);color:#dbeafe;font-size:11px;font-weight:700;text-align:center;letter-spacing:.2px;transform:translateX(calc(-50% + var(--pet-x))) translateY(var(--pet-y));opacity:.88;white-space:nowrap;transition:transform .14s ease-out,opacity .2s ease}
+.side-pet:hover .pet-time{opacity:1}
+.side-pet.is-launching .pet-time{animation:petTimeLaunch 3.6s cubic-bezier(.2,.8,.18,1) forwards}
+.pet-stage{position:absolute;left:50%;bottom:24px;width:192px;height:268px;transform:translateX(calc(-50% + var(--pet-x))) translateY(var(--pet-y)) rotate(var(--pet-tilt));animation:petFloat 2.8s ease-in-out infinite;transition:transform .14s ease-out,filter .2s ease;will-change:transform}
+.side-pet:hover .pet-stage{filter:drop-shadow(0 16px 24px rgba(37,99,235,.22))}
+.side-pet.is-launching .pet-stage{animation:petLaunch 3.6s cubic-bezier(.24,.78,.16,1) forwards}
+.side-pet.is-launching .pet-shadow{animation:petLaunchShadow 3.6s ease forwards}
+.pet-shadow{position:absolute;left:50%;bottom:24px;width:120px;height:18px;border-radius:50%;background:rgba(0,0,0,.34);filter:blur(4px);transform:translateX(calc(-50% + var(--pet-x)));animation:petShadow 2.8s ease-in-out infinite;transition:transform .14s ease-out}
+.pet-anim{position:absolute;inset:0;background-image:url('pet_frames/pet_sprite.png');background-repeat:no-repeat;background-size:600% 100%;background-position:0 0;image-rendering:auto;animation:petFrames 4.2s steps(1) infinite;filter:drop-shadow(0 6px 12px rgba(15,23,42,.35))}
+.side-pet:hover .pet-anim{animation-duration:1.4s}
+.pet-launch-flame{position:absolute;left:50%;bottom:-4px;width:30px;height:0;border-radius:999px;background:linear-gradient(180deg,#fef3c7 0%,#f97316 45%,rgba(239,68,68,0) 100%);filter:blur(.5px);opacity:0;transform:translateX(-50%);transform-origin:top center}
+.side-pet.is-launching .pet-launch-flame{height:96px;opacity:.95;animation:rocketFlame .16s ease-in-out infinite alternate}
+.pet-pulse{position:absolute;width:18px;height:18px;border:2px solid rgba(147,197,253,.9);border-radius:50%;pointer-events:none;transform:translate(-50%,-50%);animation:petPulse .62s ease-out forwards}
+.rocket-trail{position:absolute;left:50%;bottom:86px;width:4px;height:0;border-radius:999px;background:linear-gradient(180deg,rgba(96,165,250,0),rgba(96,165,250,.85),rgba(248,113,113,.12));box-shadow:0 0 22px rgba(59,130,246,.42);transform:translateX(-50%);pointer-events:none;opacity:0}
+.side-pet.is-launching .rocket-trail{animation:rocketTrail 2.05s ease-out forwards}
+.pet-spark{position:absolute;width:4px;height:4px;border-radius:50%;background:#bfdbfe;box-shadow:0 0 10px #60a5fa;opacity:.75;animation:petSpark 3.5s ease-in-out infinite;z-index:2}
+.pet-spark.s1{left:24px;top:64px}.pet-spark.s2{right:30px;top:30px;animation-delay:1s}.pet-spark.s3{left:140px;top:160px;animation-delay:2s}
+@keyframes petAura{to{transform:rotate(360deg)}}
+@keyframes petFloat{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(-10px)}}
+@keyframes petShadow{0%,100%{transform:translateX(-50%) scale(1);opacity:.45}50%{transform:translateX(-50%) scale(.82);opacity:.26}}
+@keyframes petFrames{0%{background-position:0% 0}16.66%{background-position:20% 0}33.33%{background-position:40% 0}50%{background-position:60% 0}66.66%{background-position:80% 0}83.33%{background-position:100% 0}100%{background-position:100% 0}}
+@keyframes petSpark{0%,100%{transform:translateY(0) scale(.7);opacity:.25}45%{transform:translateY(-18px) scale(1.15);opacity:.95}}
+@keyframes petPulse{0%{width:18px;height:18px;opacity:.95}100%{width:132px;height:132px;opacity:0}}
+@keyframes petLaunch{0%{opacity:1;transform:translateX(calc(-50% + var(--pet-x))) translateY(var(--pet-y)) rotate(var(--pet-tilt)) scale(1)}10%{transform:translateX(calc(-50% + var(--pet-x))) translateY(16px) rotate(0deg) scale(.96)}66%{opacity:1;transform:translateX(calc(-50% + var(--pet-x))) translateY(calc(-1 * var(--pet-rise, 720px))) rotate(2deg) scale(.9)}69%{opacity:0;transform:translateX(calc(-50% + var(--pet-x))) translateY(calc(-1 * var(--pet-rise, 760px))) scale(.84)}76%{opacity:0;transform:translateX(calc(-50% + var(--pet-x))) translateY(260px) scale(.9)}86%{opacity:1;transform:translateX(calc(-50% + var(--pet-x))) translateY(42px) rotate(-2deg) scale(1.02)}94%{transform:translateX(calc(-50% + var(--pet-x))) translateY(-8px) rotate(1deg) scale(1)}100%{opacity:1;transform:translateX(calc(-50% + var(--pet-x))) translateY(var(--pet-y)) rotate(var(--pet-tilt)) scale(1)}}
+@keyframes petTimeLaunch{0%{opacity:.9;transform:translateX(calc(-50% + var(--pet-x))) translateY(var(--pet-y))}10%{opacity:.95;transform:translateX(calc(-50% + var(--pet-x))) translateY(16px)}66%{opacity:.95;transform:translateX(calc(-50% + var(--pet-x))) translateY(calc(-1 * var(--pet-rise, 720px)))}69%{opacity:0;transform:translateX(calc(-50% + var(--pet-x))) translateY(calc(-1 * var(--pet-rise, 760px)))}76%{opacity:0;transform:translateX(calc(-50% + var(--pet-x))) translateY(260px)}86%{opacity:.95;transform:translateX(calc(-50% + var(--pet-x))) translateY(42px)}100%{opacity:.88;transform:translateX(calc(-50% + var(--pet-x))) translateY(var(--pet-y))}}
+@keyframes petLaunchShadow{0%,100%{opacity:.45;transform:translateX(calc(-50% + var(--pet-x))) scale(1)}18%{opacity:.2;transform:translateX(calc(-50% + var(--pet-x))) scale(.6)}58%,76%{opacity:0;transform:translateX(calc(-50% + var(--pet-x))) scale(.22)}88%{opacity:.35;transform:translateX(calc(-50% + var(--pet-x))) scale(1.18)}}
+@keyframes rocketFlame{0%{transform:translateX(-50%) scaleY(.72);filter:blur(.5px)}100%{transform:translateX(-50%) scaleY(1.12);filter:blur(1px)}}
+@keyframes rocketTrail{0%{height:0;opacity:0}10%{height:70px;opacity:.72}60%{height:calc(var(--pet-rise, 720px) - 120px);opacity:.92}82%{height:calc(var(--pet-rise, 720px) - 120px);opacity:.18}100%{height:0;opacity:0}}
+.main{margin-left:var(--sidebar-w);flex:1;min-width:0;position:relative}
+.header{height:var(--header-h);background:rgba(255,255,255,.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 28px;position:sticky;top:0;z-index:50}
+.header-left{font-size:18px;font-weight:700;letter-spacing:-0.3px;color:#0f172a}
+.header-right{display:flex;align-items:center;gap:20px;font-size:13px;color:var(--muted)}
+.header-expiry{display:inline-flex;align-items:center;gap:6px;color:#64748b;background:#f8fafc;border:1px solid #e2e8f0;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:600}
+.header-expiry b{color:#ef4444;font-weight:700}
+.header-right a{color:var(--danger);text-decoration:none;cursor:pointer;font-weight:600;padding:6px 14px;border-radius:6px;transition:all .2s;font-size:13px}
+.header-right a:hover{background:rgba(239,68,68,.06)}
+.content{padding:24px 28px;position:relative}
+.content::before{content:none}
+.content::after{content:'';position:fixed;left:calc(var(--sidebar-w) + 120px);right:-8px;top:92px;bottom:0;pointer-events:none;z-index:0;background:url('image-generate-f70447c5.png') right bottom/clamp(560px,48vw,860px) auto no-repeat;opacity:.9;filter:saturate(1.02) contrast(1.01) brightness(1.01)}
+.content>*{position:relative;z-index:1}
+
+/* Cards */
+.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+.stat-card{background:#fff;border-radius:var(--radius);padding:22px 24px;border:1px solid #e2e8f0;box-shadow:0 16px 40px rgba(15,23,42,.08);transition:all .25s;position:relative;overflow:hidden}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--primary),var(--info));opacity:0;transition:opacity .25s}
+.stat-card:hover{box-shadow:var(--shadow-md);transform:translateY(-2px)}
+.stat-card:hover::before{opacity:1}
+.stat-card .label{font-size:12px;color:var(--muted);margin-bottom:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px}
+.stat-card .value{font-size:30px;font-weight:800;letter-spacing:-1px}
+.stat-card .value.green{color:var(--success)}.stat-card .value.red{color:var(--danger)}.stat-card .value.blue{color:var(--primary)}.stat-card .value.purple{color:var(--info)}
+.card{background:#fff;border-radius:var(--radius);border:1px solid #e2e8f0;margin-bottom:20px;box-shadow:0 18px 44px rgba(15,23,42,.08);transition:box-shadow .25s}
+.card:hover{box-shadow:var(--shadow-md)}
+.card-head{padding:18px 24px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.card-head h3{font-size:15px;font-weight:700;letter-spacing:-0.2px;color:#0f172a}
+.card-body{padding:20px 24px}
+.card-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+/* Table */
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:12px 14px;border-bottom:1px solid #f1f5f9;font-size:13px;white-space:nowrap}
+th{background:rgba(248,250,252,.96);font-weight:600;color:#64748b;white-space:nowrap;text-transform:uppercase;font-size:11px;letter-spacing:0.5px}
+tr{transition:background .15s}
+tr:hover td{background:#f8fafc}
+.account-pager{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-top:1px solid #f1f5f9;background:#fff;flex-wrap:wrap}
+.account-pager-info{font-size:12px;color:var(--muted);font-weight:600}
+.account-pager-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.account-pager-actions .btn[disabled]{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none}
+.account-page-size{height:30px;border:1px solid #e2e8f0;border-radius:7px;padding:0 8px;background:#f8fafc;color:#334155;font-size:12px;font-family:var(--font)}
+
+/* Buttons */
+.btn{height:34px;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;padding:0 16px;display:inline-flex;align-items:center;gap:5px;transition:all .2s;color:#fff;font-family:var(--font);letter-spacing:-0.1px;white-space:nowrap}
+.btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.1)}
+.btn:active{transform:translateY(0)}
+.btn-sm{height:28px;font-size:12px;padding:0 12px;border-radius:6px;white-space:nowrap}
+.btn-primary{background:linear-gradient(135deg,var(--primary),var(--primary-dark));box-shadow:0 2px 8px rgba(99,102,241,.25)}.btn-success{background:linear-gradient(135deg,var(--success),#059669);box-shadow:0 2px 8px rgba(16,185,129,.25)}.btn-danger{background:linear-gradient(135deg,var(--danger),#dc2626);box-shadow:0 2px 8px rgba(239,68,68,.25)}.btn-warning{background:linear-gradient(135deg,var(--warning),#d97706);color:#fff;box-shadow:0 2px 8px rgba(245,158,11,.25)}.btn-info{background:linear-gradient(135deg,var(--info),#7c3aed);box-shadow:0 2px 8px rgba(139,92,246,.25)}.btn-default{background:#fff;color:var(--text);border:1px solid #dbe2ea;box-shadow:0 8px 18px rgba(15,23,42,.07)}
+.btn-default:hover{background:#f8fafc;border-color:#cbd5e1}
+
+/* Tags */
+.tag{display:inline-block;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:600;line-height:18px;letter-spacing:-0.1px}
+.tag-success{background:#ecfdf5;color:#059669;border:1px solid #a7f3d0}.tag-danger{background:#fef2f2;color:#dc2626;border:1px solid #fecaca}.tag-warning{background:#fffbeb;color:#d97706;border:1px solid #fde68a}.tag-info{background:#f5f3ff;color:#7c3aed;border:1px solid #ddd6fe}.tag-blue{background:#eef2ff;color:#4f46e5;border:1px solid #c7d2fe}
+
+/* Form */
+.form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
+.form-item{display:flex;flex-direction:column;gap:6px}
+.form-item label{font-size:13px;color:#64748b;font-weight:600;letter-spacing:-0.1px}
+.form-item input,.form-item textarea,.form-item select{height:40px;border:2px solid #e2e8f0;border-radius:8px;padding:0 12px;font-size:14px;font-family:var(--font);transition:all .2s;background:#f8fafc}
+.form-item input:focus,.form-item textarea:focus,.form-item select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(99,102,241,.1);background:#fff}
+.form-item textarea{height:auto;min-height:80px;padding:10px 12px;resize:vertical}
+.form-check{display:flex;align-items:center;gap:8px;padding-top:20px}
+.form-check input[type="checkbox"]{width:18px;height:18px;accent-color:var(--primary)}
+
+/* Log items */
+.log-entry{padding:14px 20px;border-bottom:1px solid #f1f5f9;font-size:13px;transition:background .15s}
+.log-entry:last-child{border-bottom:none}
+.log-entry:hover{background:#f8fafc}
+.log-meta{display:flex;gap:10px;align-items:center;margin-bottom:6px;flex-wrap:wrap}
+.log-detail{color:#64748b;line-height:1.9}
+.log-detail code{background:#f1f5f9;padding:2px 8px;border-radius:5px;font-size:12px;color:#334155;font-weight:500}
+.log-actions{margin-top:8px;display:flex;gap:8px}
+.log-actions a{font-size:12px;color:var(--primary);text-decoration:none;font-weight:600;padding:2px 6px;border-radius:4px;transition:background .15s}
+.log-actions a:hover{background:rgba(99,102,241,.06)}
+pre.resp{background:#fff;padding:12px 14px;border-radius:8px;font-size:12px;overflow-x:auto;max-height:160px;margin-top:8px;color:#334155;border:1px solid #e2e8f0;line-height:1.6}
+
+/* Device */
+.device-card{padding:14px 16px;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;background:#fff;box-shadow:0 10px 24px rgba(15,23,42,.05)}
+.device-info{flex:1;min-width:200px}
+.device-info b{font-size:15px}
+.device-meta{font-size:12px;color:var(--muted);margin-top:4px;display:flex;gap:12px;flex-wrap:wrap}
+
+/* Stats user row */
+.stats-user{padding:18px 20px;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:12px;background:#fff;transition:all .2s;box-shadow:0 16px 40px rgba(15,23,42,.08)}
+.stats-user:hover{box-shadow:var(--shadow-md);border-color:#cbd5e1}
+.stats-user-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+.stats-nums{display:flex;gap:24px;font-size:14px}
+.stats-records{margin-top:8px;font-size:12px;color:var(--muted)}
+
+.empty{text-align:center;padding:48px;color:var(--muted);font-size:14px}
+.hidden{display:none !important}
+@media(max-width:768px){.sidebar{width:0;overflow:hidden}.main{margin-left:0}.content::before{content:none}.content::after{left:48px;right:-18px;top:132px;bottom:0;background:url('image-generate-f70447c5.png') right bottom/clamp(260px,60vw,380px) auto no-repeat;opacity:.72}.stat-row{grid-template-columns:repeat(2,1fr)}.form-grid{grid-template-columns:1fr}.login-box{width:90vw;padding:32px 24px}.header{padding:0 16px}.content{padding:16px}}
+
+.modal-mask{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,23,42,.5);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);z-index:200;display:flex;align-items:center;justify-content:center;animation:fadeIn .2s ease}
+@keyframes fadeIn{0%{opacity:0}100%{opacity:1}}
+.modal-box{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:28px;width:480px;max-width:90vw;max-height:80vh;overflow-y:auto;box-shadow:0 25px 60px rgba(0,0,0,.2);animation:modalIn .3s cubic-bezier(.16,1,.3,1)}
+@keyframes modalIn{0%{opacity:0;transform:scale(.95) translateY(10px)}100%{opacity:1;transform:scale(1) translateY(0)}}
+.modal-box h3{margin-bottom:20px;font-size:17px;font-weight:700;color:#0f172a}
+.modal-footer{margin-top:20px;display:flex;justify-content:flex-end;gap:10px}
+
+/* H5 shell: same full web app, mobile layout only */
+html.h5-mode,html:has(body.h5-mode),body.h5-mode{width:100%;max-width:100%;overflow-x:hidden}
+body.h5-mode{background:var(--bg);overscroll-behavior:none}
+body.h5-mode *{max-width:100%}
+body.h5-mode .layout{display:block;min-height:100vh;width:100%;max-width:100%;overflow-x:hidden}
+body.h5-mode .sidebar{position:fixed;left:0;right:0;bottom:0;top:auto;width:auto;height:calc(78px + env(safe-area-inset-bottom,0px));z-index:180;border-right:0;border-top:1px solid rgba(255,255,255,.08);overflow-x:auto;overflow-y:hidden;background:linear-gradient(180deg,#0f172a 0%,#1e293b 100%);box-shadow:0 -18px 45px rgba(15,23,42,.2)}
+body.h5-mode .sidebar::-webkit-scrollbar{height:0}
+body.h5-mode .sidebar-logo{display:none}
+body.h5-mode .sidebar-menu{display:flex;gap:6px;min-width:max-content;padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px))}
+body.h5-mode .menu-item{height:54px;min-width:86px;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;margin:0;padding:6px 8px;border-radius:14px;font-size:11px;line-height:1.2;white-space:nowrap;color:rgba(255,255,255,.62)}
+body.h5-mode .menu-item.active{color:#fff;background:linear-gradient(135deg,rgba(99,102,241,.38),rgba(139,92,246,.26))}
+body.h5-mode .menu-icon{width:auto;font-size:16px;line-height:1}
+body.h5-mode .main{margin-left:0;min-height:100vh;padding-bottom:calc(84px + env(safe-area-inset-bottom,0px));width:100%;max-width:100%;min-width:0;overflow-x:hidden}
+body.h5-mode .header{min-height:58px;height:auto;padding:10px 12px;gap:10px;align-items:flex-start}
+body.h5-mode .header-left{font-size:17px;line-height:1.4;padding-top:4px}
+body.h5-mode .header-right{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;font-size:12px}
+body.h5-mode .header-expiry{padding:4px 8px;font-size:11px}
+body.h5-mode .content{padding:12px 12px calc(96px + env(safe-area-inset-bottom,0px));width:100%;max-width:100%;overflow-x:hidden}
+body.h5-mode .content::after{left:0;right:-36px;top:118px;bottom:80px;background:url('image-generate-f70447c5.png') right bottom/clamp(250px,66vw,430px) auto no-repeat;opacity:.52}
+body.h5-mode .stat-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:12px}
+body.h5-mode .stat-card{padding:14px;border-radius:12px}
+body.h5-mode .stat-card .value{font-size:24px;letter-spacing:0;word-break:break-word}
+body.h5-mode .page,body.h5-mode .card,body.h5-mode .form-grid,body.h5-mode .form-item{width:100%;max-width:100%;min-width:0}
+body.h5-mode .card{border-radius:12px;margin-bottom:12px;overflow:hidden}
+body.h5-mode .card-head{padding:12px;align-items:flex-start;gap:8px}
+body.h5-mode .card-head h3{font-size:15px;line-height:1.4}
+body.h5-mode .card-toolbar{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+body.h5-mode .card-body{padding:12px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+body.h5-mode table{width:max-content;min-width:640px;max-width:none}
+body.h5-mode th,body.h5-mode td{padding:10px 8px;font-size:12px;vertical-align:top}
+body.h5-mode .form-grid{grid-template-columns:1fr;gap:12px}
+body.h5-mode .form-item input,body.h5-mode .form-item textarea,body.h5-mode select{font-size:16px;width:100%;max-width:100%;min-width:0}
+body.h5-mode input,body.h5-mode textarea,body.h5-mode select{max-width:100%;min-width:0}
+body.h5-mode .btn{min-height:34px}
+body.h5-mode .btn-sm{height:32px;padding:0 10px;font-size:12px}
+body.h5-mode .modal-mask{align-items:flex-end;padding:10px}
+body.h5-mode .modal{width:100%;max-width:calc(100vw - 20px);max-height:calc(100vh - 24px);overflow:auto;border-radius:16px 16px 12px 12px}
+body.h5-mode .modal-footer{position:sticky;bottom:0;background:#fff;padding-top:12px;flex-wrap:wrap}
+body.h5-mode .login-box{width:calc(100vw - 28px);padding:34px 24px}
+body.h5-mode pre.resp{font-size:12px;max-height:55vh}
+</style>
+</head>
+<body class="">
+
+<!-- Login Page -->
+<div class="login-wrap" id="loginPage">
+<div class="login-box">
+    <div style="text-align:center;margin-bottom:20px">
+        <img src="1777990327149137925.png" alt="logo" style="width:80px;height:80px;border-radius:16px;object-fit:cover;box-shadow:0 8px 24px rgba(0,0,0,.15)">
+    </div>
+    <h1>Ajie 后台</h1>
+    <p>日志监控 / 设备管理 / 数据统计</p>
+    <input type="password" id="loginPwd" placeholder="请输入管理密码" onkeydown="if(event.key==='Enter')doLogin()">
+    <button onclick="doLogin()">登 录</button>
+</div>
+</div>
+
+<!-- Admin Layout -->
+<div class="layout hidden" id="adminLayout">
+<div class="sidebar">
+    <div class="sidebar-logo">
+        <div class="sidebar-logo-icon">
+            <img src="1777990327149137925.png" alt="logo" style="width:100%;height:100%;object-fit:cover;border-radius:9px">
+        </div>
+        Ajie 控制台
+    </div>
+    <div class="sidebar-menu">
+        <div class="menu-item" onclick="openPasswordModal()"><i class="menu-icon">&#128274;</i>修改密码</div>
+        <div class="menu-item" onclick="switchPage('extconfig',this)"><i class="menu-icon">&#128273;</i>浏览器插件配置</div>
+        <div class="menu-item active" onclick="switchPage('dashboard',this)"><i class="menu-icon">&#9632;</i>仪表盘</div>
+        <div class="menu-item" data-page-menu="logs" onclick="switchPage('logs',this)"><i class="menu-icon">&#9776;</i>转发日志</div>
+        <div class="menu-item" onclick="switchPage('devices',this)"><i class="menu-icon">&#9679;</i>在线设备</div>
+        <div class="menu-item" onclick="switchPage('stats',this)"><i class="menu-icon">&#9733;</i>环境统计</div>
+        <div class="menu-item" onclick="switchPage('accounts',this)"><i class="menu-icon">&#9737;</i>账号授权</div>
+        <div class="menu-item" onclick="switchPage('update',this)"><i class="menu-icon">&#8679;</i>更新发布</div>
+        <div class="menu-item" onclick="switchPage('verctrl',this)"><i class="menu-icon">&#9881;</i>版本控制</div>
+        <div class="menu-item" onclick="switchPage('data',this)"><i class="menu-icon">&#128196;</i>解密数据</div>
+        <div class="menu-item" onclick="switchPage('jsonmon',this)"><i class="menu-icon">&#128450;</i>JSON监控</div>
+        <div class="menu-item" onclick="switchPage('sqlite',this)"><i class="menu-icon">&#9638;</i>SQLite监控</div>
+        <div class="menu-item" onclick="switchPage('cache',this)"><i class="menu-icon">&#9851;</i>缓存清理</div>
+    </div>
+</div>
+<div class="main">
+    <div class="header">
+        <div class="header-left" id="pageTitle">仪表盘</div>
+        <div class="header-right">
+            <span class="header-expiry" id="serverExpiry">服务器到期 <b>--</b></span>
+            <span id="headerTime"></span>
+            <button class="btn btn-default btn-sm" onclick="openPasswordModal()">修改密码</button>
+            <a onclick="doLogout()">退出登录</a>
+        </div>
+    </div>
+    <div class="content">
+
+    <!-- Dashboard -->
+    <div class="page" id="page-dashboard">
+        <div class="stat-row" id="dashStats"></div>
+        <div class="card"><div class="card-head"><h3>最近转发</h3><div class="card-toolbar"><button class="btn btn-primary btn-sm" onclick="switchPage('logs',document.querySelector('[data-page-menu=&quot;logs&quot;]'))">查看全部</button></div></div><div class="card-body"><div id="dashLogs" style="max-height:400px;overflow-y:auto"><div class="empty">加载中...</div></div></div></div>
+    </div>
+
+    <!-- Logs -->
+    <div class="page hidden" id="page-logs">
+        <div class="card"><div class="card-head"><h3>转发日志</h3><div class="card-toolbar"><button class="btn btn-primary btn-sm" onclick="loadLogs()">刷新</button><button class="btn btn-success btn-sm" onclick="toggleAutoLog()" id="autoLogBtn">自动刷新</button><button class="btn btn-danger btn-sm" onclick="clearLogs()">清空</button></div></div><div class="card-body" style="padding:0"><div id="logList"><div class="empty">点击刷新加载日志</div></div></div></div>
+    </div>
+
+    <!-- Devices -->
+    <div class="page hidden" id="page-devices">
+        <div class="card"><div class="card-head"><h3>在线设备 <span id="onlineCount" style="color:var(--success);font-size:14px"></span></h3><div class="card-toolbar"><span style="font-size:12px;color:var(--muted)">每10秒自动刷新，禁用设备会保留显示便于解除</span></div></div><div class="card-body"><div id="deviceList"><div class="empty">加载中...</div></div></div></div>
+    </div>
+
+    <!-- Stats -->
+    <div class="page hidden" id="page-stats">
+        <div class="card"><div class="card-head"><h3>指纹环境管理</h3><div class="card-toolbar"><select id="statsDate" onchange="loadStats()" style="height:34px;border:2px solid #e2e8f0;border-radius:8px;padding:0 12px;font-size:13px;font-family:var(--font);background:#f8fafc"></select><button class="btn btn-danger btn-sm" onclick="clearStats()">清除统计</button></div></div><div class="card-body"><div id="statsBody"><div class="empty">加载中...</div></div></div></div>
+    </div>
+
+    <!-- Browser Plugin Config -->
+    <div class="page hidden" id="page-extconfig">
+        <div class="card">
+            <div class="card-head">
+                <h3>浏览器插件配置 <span id="extAccountCount" style="font-size:13px;color:var(--muted)"></span></h3>
+                <div class="card-toolbar">
+                    <button class="btn btn-primary btn-sm" onclick="showExtAccountModal()">新增插件账号</button>
+                    <button class="btn btn-info btn-sm" onclick="showExtBatchModal()">批量生成</button>
+                </div>
+            </div>
+            <div class="card-body" style="padding:0">
+                <div style="font-size:12px;color:var(--muted);padding:10px 12px 0">这里填写真实任务接口账号密码，系统生成下发给用户的 accountId/token。</div>
+                <div id="extAccountTable"><div class="empty">加载中...</div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Accounts -->
+    <div class="page hidden" id="page-accounts">
+        <div class="form-grid">
+        <div class="card">
+            <div class="card-head">
+                <h3>聚星账号白名单 <span id="api1Count" style="font-size:13px;color:var(--muted)"></span></h3>
+                <div class="card-toolbar">
+                    <button class="btn btn-primary btn-sm" onclick="showAddAccount(1)">单独添加</button>
+                    <button class="btn btn-info btn-sm" onclick="showBatchAdd(1)">批量添加</button>
+                    <button class="btn btn-danger btn-sm" id="batchDelete1" onclick="deleteSelectedAccounts(1)" disabled>批量删除</button>
+                </div>
+            </div>
+            <div class="card-body" style="padding:0"><div style="font-size:12px;color:var(--muted);padding:10px 12px 0">未设置账号会拒绝登录</div><div id="api1Table"><div class="empty">加载中...</div></div></div>
+        </div>
+        </div>
+    </div>
+
+    <!-- Update -->
+    <div class="page hidden" id="page-update">
+        <div id="updateBody"><div class="empty">加载中...</div></div>
+    </div>
+
+    <!-- Version Control -->
+    <div class="page hidden" id="page-verctrl">
+        <div class="card">
+            <div class="card-head"><h3>版本控制</h3></div>
+            <div class="card-body">
+                <div style="background:linear-gradient(135deg,#fefce8,#fffbeb);border:1px solid #fde68a;padding:12px 16px;border-radius:10px;margin-bottom:16px;font-size:13px;color:#92400e">低于最低版本号的App将被强制停用；也可单独停用指定版本。App检测到停用后弹窗提示并要求更新。</div>
+                <div class="form-grid" style="margin-bottom:20px">
+                    <div class="form-item"><label>最低允许版本号 (versionCode)</label><input id="vcMinCode" type="number" min="0" value="0" placeholder="0表示不限制"></div>
+                    <div class="form-item"><label>低版本停用提示语</label><input id="vcMinMsg" value="" placeholder="您的版本已停用，请更新到最新版本"></div>
+                    <div class="form-item"><label>接口2编号最小值</label><input id="api2LoginMin" type="number" min="0" value="0"></div>
+                    <div class="form-item"><label>接口2编号最大值</label><input id="api2LoginMax" type="number" min="0" value="10000"></div>
+                </div>
+                <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px">
+                    <button class="btn btn-primary" onclick="saveVerCtrl()">保存设置</button>
+                    <span id="vcResult" style="font-size:13px;color:var(--muted)"></span>
+                </div>
+                <div class="card" style="margin-top:10px">
+                    <div class="card-head"><h3>单独停用版本</h3><div class="card-toolbar"><button class="btn btn-danger btn-sm" onclick="showAddBlockedVer()">添加停用版本</button></div></div>
+                    <div class="card-body" style="padding:0"><div id="blockedVerList"><div class="empty">暂无停用版本</div></div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data -->
+    <div class="page hidden" id="page-data">
+        <div class="card"><div class="card-head"><h3>解密数据列表</h3><div class="card-toolbar"><button class="btn btn-info btn-sm" onclick="openLatestDump()">打开最新</button></div></div><div class="card-body"><div id="dumpList"><div class="empty">加载中...</div></div></div></div>
+    </div>
+
+    <!-- JSON Monitor -->
+    <div class="page hidden" id="page-jsonmon">
+        <div class="card">
+            <div class="card-head">
+                <h3>JSON文件监控</h3>
+                <div class="card-toolbar">
+                    <button class="btn btn-primary btn-sm" onclick="loadJsonMonitor()">刷新</button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div style="background:linear-gradient(135deg,#eff6ff,#f5f3ff);border:1px solid #c7d2fe;padding:12px 16px;border-radius:10px;margin-bottom:16px;font-size:13px;color:#334155">
+                    只读取 decrypt_proxy.php 同目录下的 .json / .jsonl 文件；password、token、auth、hash 等字段会自动打码。
+                </div>
+                <div id="jsonMonitorBody"><div class="empty">点击刷新加载文件</div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SQLite Monitor -->
+    <div class="page hidden" id="page-sqlite">
+        <div class="card">
+            <div class="card-head">
+                <h3>SQLite运行监控</h3>
+                <div class="card-toolbar">
+                    <button class="btn btn-primary btn-sm" onclick="loadSQLiteMonitor()">刷新</button>
+                    <button class="btn btn-success btn-sm" onclick="toggleSQLiteAuto()" id="sqliteAutoBtn">自动刷新</button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div style="background:linear-gradient(135deg,#ecfdf5,#eff6ff);border:1px solid #bfdbfe;padding:12px 16px;border-radius:10px;margin-bottom:16px;font-size:13px;color:#334155">
+                    监控 runtime.sqlite 的任务队列、任务租约、WAL文件和数据库健康状态；敏感 token 不会显示。
+                </div>
+                <div id="sqliteMonitorBody"><div class="empty">点击刷新加载数据库状态</div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cache -->
+    <div class="page hidden" id="page-cache">
+        <div class="card">
+            <div class="card-head">
+                <h3>缓存清理工具</h3>
+                <div class="card-toolbar">
+                    <button class="btn btn-primary btn-sm" onclick="loadCacheOverview()">刷新</button>
+                    <button class="btn btn-danger btn-sm" onclick="cleanupCache('unused')">清理废弃缓存</button>
+                    <button class="btn btn-info btn-sm" onclick="cleanupCache('deep')">深度清理</button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div style="background:linear-gradient(135deg,#fefce8,#fffbeb);border:1px solid #fde68a;padding:12px 16px;border-radius:10px;margin-bottom:16px;font-size:13px;color:#92400e">
+                    上传详情缓存已启用，可在日志中查看上传响应；深度清理会额外清空日志并整理旧缓存。
+                </div>
+                <div id="cacheResult" style="font-size:13px;color:var(--muted);margin-bottom:12px"></div>
+                <div id="cacheBody"><div class="empty">加载中...</div></div>
+            </div>
+        </div>
+    </div>
+
+    </div>
+</div>
+</div>
+
+<!-- Password Modal -->
+<div class="modal-mask hidden" id="passwordModal" onclick="if(event.target===this)closePasswordModal()">
+<div class="modal-box">
+    <h3>修改后台密码</h3>
+    <div class="form-grid">
+        <div class="form-item"><label>当前密码</label><input id="currentPwd" type="password" autocomplete="current-password"></div>
+        <div class="form-item"><label>新密码</label><input id="newPwd" type="password" autocomplete="new-password" placeholder="至少 6 位"></div>
+        <div class="form-item"><label>确认新密码</label><input id="confirmPwd" type="password" autocomplete="new-password"></div>
+    </div>
+    <div id="passwordResult" style="font-size:13px;color:var(--muted);margin-top:14px;min-height:18px"></div>
+    <div class="modal-footer">
+        <button class="btn btn-default" onclick="closePasswordModal()">取消</button>
+        <button class="btn btn-primary" onclick="submitPasswordChange()">保存</button>
+    </div>
+</div>
+</div>
+
+<!-- Account Modal -->
+<div class="modal-mask hidden" id="accountModal" onclick="if(event.target===this)closeAccountModal()">
+<div class="modal-box">
+    <h3 id="acctModalTitle">添加账号</h3>
+    <div id="acctModalBody"></div>
+    <div class="modal-footer">
+        <button class="btn btn-default" onclick="closeAccountModal()">取消</button>
+        <button class="btn btn-primary" onclick="acctModalConfirm()">确定</button>
+    </div>
+</div>
+</div>
+
+<script>
+const BASE = location.pathname;
+const AUTH_KEY = '';
+const SERVER_RENDER_TIME_MS = 1784708912141;
+const CLIENT_RENDER_TIME_MS = Date.now();
+let KEY = localStorage.getItem('admin_key') || '';
+let autoLogTimer = null, deviceTimer = null, sqliteTimer = null;
+
+function doLogin() {
+    const pwd = document.getElementById('loginPwd').value.trim();
+    if (!pwd) return alert('请输入密码');
+    KEY = pwd;
+    localStorage.setItem('admin_key', pwd);
+    authFetch(BASE+'?act=logs&limit=1').then(r=>r.json()).then(d=>{
+        if (d.ok === false && d.msg === '密码错误') { alert('密码错误'); KEY=''; localStorage.removeItem('admin_key'); return; }
+        showAdmin();
+    }).catch(()=>alert('网络错误'));
+}
+function doLogout() { KEY=''; localStorage.removeItem('admin_key'); location.reload(); }
+function openPasswordModal() {
+    document.getElementById('currentPwd').value = KEY || '';
+    document.getElementById('newPwd').value = '';
+    document.getElementById('confirmPwd').value = '';
+    document.getElementById('passwordResult').textContent = '';
+    document.getElementById('passwordModal').classList.remove('hidden');
+    setTimeout(()=>document.getElementById('newPwd').focus(), 0);
+}
+function closePasswordModal() { document.getElementById('passwordModal').classList.add('hidden'); }
+async function submitPasswordChange() {
+    const current = document.getElementById('currentPwd').value.trim();
+    const next = document.getElementById('newPwd').value.trim();
+    const confirm = document.getElementById('confirmPwd').value.trim();
+    const result = document.getElementById('passwordResult');
+    if (!current || !next || !confirm) { result.textContent = '请填写当前密码和新密码'; return; }
+    const fd = new FormData();
+    fd.append('act', 'change_password');
+    fd.append('current_password', current);
+    fd.append('new_password', next);
+    fd.append('confirm_password', confirm);
+    result.textContent = '保存中...';
+    try {
+        const r = await authFetch(BASE, { method: 'POST', body: fd });
+        const d = await r.json();
+        result.textContent = d.msg || (d.ok ? '密码已修改' : '修改失败');
+        if (d.ok) {
+            KEY = next;
+            localStorage.setItem('admin_key', KEY);
+            setTimeout(closePasswordModal, 800);
+        }
+    } catch (e) {
+        result.textContent = '网络错误';
+    }
+}
+function initSidePet() {
+    return;
+}
+function currentServerDate(){
+    return new Date(SERVER_RENDER_TIME_MS + (Date.now() - CLIENT_RENDER_TIME_MS));
+}
+function nextServerExpiryDate(now){
+    return new Date(2026, 7, 18, 0, 0, 0, 0);
+}
+function formatExpiryCountdown(ms){
+    const totalSeconds=Math.max(0,Math.floor(ms/1000));
+    const days=Math.floor(totalSeconds/86400);
+    const hours=Math.floor((totalSeconds%86400)/3600);
+    const minutes=Math.floor((totalSeconds%3600)/60);
+    const seconds=totalSeconds%60;
+    return `${days}天 ${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
+}
+function updateHeaderClock(){
+    const now=currentServerDate();
+    const timeEl=document.getElementById('headerTime');
+    if(timeEl) timeEl.textContent=now.toLocaleTimeString();
+    const expiryEl=document.getElementById('serverExpiry');
+    if(expiryEl){
+        const expiry=nextServerExpiryDate(now);
+        const dateText=`${expiry.getFullYear()}-${String(expiry.getMonth()+1).padStart(2,'0')}-${String(expiry.getDate()).padStart(2,'0')}`;
+        expiryEl.innerHTML=`服务器到期 ${dateText} <b>${formatExpiryCountdown(expiry-now)}</b>`;
+    }
+}
+function showAdmin() {
+    document.getElementById('loginPage').classList.add('hidden');
+    document.getElementById('adminLayout').classList.remove('hidden');
+    initSidePet();
+    loadDashboard();
+    updateHeaderClock();
+    setInterval(updateHeaderClock, 1000);
+}
+
+if (KEY) { authFetch(BASE+'?act=logs&limit=1').then(r=>r.json()).then(d=>{ if(d.ok!==false||d.msg!=='密码错误') showAdmin(); else { KEY=''; localStorage.removeItem('admin_key'); }}).catch(()=>{}); }
+
+const pageTitles = {dashboard:'仪表盘',logs:'转发日志',devices:'在线设备',stats:'指纹环境管理',extconfig:'浏览器插件配置',accounts:'账号授权',update:'更新发布',verctrl:'版本控制',data:'解密数据',cache:'缓存清理'};
+let currentPage = 'dashboard';
+pageTitles.jsonmon = 'JSON文件监控';
+pageTitles.sqlite = 'SQLite运行监控';
+function switchPage(name, el) {
+    if (deviceTimer && name !== 'devices') { clearInterval(deviceTimer); deviceTimer = null; }
+    if (sqliteTimer && name !== 'sqlite') { clearInterval(sqliteTimer); sqliteTimer = null; const b=document.getElementById('sqliteAutoBtn'); if(b){b.textContent='自动刷新';b.className='btn btn-success btn-sm';} }
+    currentPage = name;
+    document.querySelectorAll('.page').forEach(p=>p.classList.add('hidden'));
+    document.getElementById('page-'+name).classList.remove('hidden');
+    document.querySelectorAll('.menu-item').forEach(m=>m.classList.remove('active'));
+    if (el) el.classList.add('active');
+    document.getElementById('pageTitle').textContent = pageTitles[name]||name;
+    if (name==='dashboard') loadDashboard();
+    else if (name==='logs') loadLogs();
+    else if (name==='devices') { loadDevices(); if(!deviceTimer) deviceTimer=setInterval(loadDevices,10000); }
+    else if (name==='stats') loadStats();
+    else if (name==='extconfig') loadApi1Accounts();
+    else if (name==='accounts') loadApi1Accounts();
+    else if (name==='update') loadUpdateConfig();
+    else if (name==='verctrl') loadVerCtrl();
+    else if (name==='data') loadDumpList();
+    else if (name==='jsonmon') loadJsonMonitor();
+    else if (name==='sqlite') loadSQLiteMonitor();
+    else if (name==='cache') loadCacheOverview();
+}
+
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function escAttr(s){return esc(s).replace(/"/g,'&quot;');}
+function logDeviceLabel(log){
+    const values=[
+        log&&log.platform,
+        log&&log.device_type,
+        log&&log.device_label,
+        log&&log.client,
+        log&&log.client_label,
+        log&&log.source,
+        log&&log.device_id,
+        log&&log.fingerprint_name
+    ].map(v=>String(v||'').trim()).filter(Boolean);
+    const text=values.join(' ').toLowerCase();
+    const source=String(log&&log.source||'').toLowerCase();
+    if(text.includes('android')||text.includes('\u5b89\u5353'))return '\u5b89\u5353';
+    if(text.includes('ios')||text.includes('iphone')||text.includes('ipad')||source.indexOf('ios_')===0)return 'iOS';
+    if(text.includes('gejie-extension')||text.includes('extension')||text.includes('\u6d4f\u89c8\u5668\u63d2\u4ef6')||text.includes('\u7f51\u9875\u63d2\u4ef6')||source.indexOf('web_')===0||source.indexOf('decoded_extension')===0)return '\u7f51\u9875\u63d2\u4ef6';
+    if(text.includes('gejie-controller')||text.includes('\u4e2d\u63a7')||source.indexOf('ctrl_')===0)return '\u4e2d\u63a7';
+    if(text.includes('web'))return '\u7f51\u9875\u63d2\u4ef6';
+    return '';
+}
+function authFetch(url,opts){opts=opts||{};if(!opts.headers)opts.headers={};opts.headers['X-Auth-Key']=KEY;return fetch(url,opts);}
+async function viewJson(act,id,extra){
+    try{
+        let url=BASE+'?act='+act+'&id='+id;
+        if(extra){
+            Object.keys(extra).forEach(k=>{
+                if(extra[k]!==undefined&&extra[k]!==null) url+='&'+encodeURIComponent(k)+'='+encodeURIComponent(extra[k]);
+            });
+        }
+        const r=await authFetch(url);
+        const text=await r.text();
+        const blob=new Blob([text],{type:'application/json;charset=utf-8'});
+        window.open(URL.createObjectURL(blob),'_blank');
+    }catch(e){alert('加载失败: '+e.message);}
+}
+
+// ===== Dashboard =====
+async function loadDashboard() {
+    try {
+        const [logsR, devR, statsR] = await Promise.all([
+            authFetch(BASE+'?act=logs&limit=50').then(r=>r.json()),
+            authFetch(BASE+'?act=devices').then(r=>r.json()),
+            authFetch(BASE+'?act=stats').then(r=>r.json())
+        ]);
+        const logs = logsR.data||[];
+        const online = devR.online_count||0;
+        const users = statsR.data||[];
+        const todayTotal = users.reduce((s,u)=>s+u.total,0);
+        const todayOk = users.reduce((s,u)=>s+u.success,0);
+        const ok = logs.filter(l=>l.status==='success').length;
+        document.getElementById('dashStats').innerHTML = `
+            <div class="stat-card"><div class="label">在线设备</div><div class="value blue">${online}</div></div>
+            <div class="stat-card"><div class="label">今日请求</div><div class="value">${todayTotal}</div></div>
+            <div class="stat-card"><div class="label">今日成功</div><div class="value green">${todayOk}</div></div>
+            <div class="stat-card"><div class="label">活跃指纹</div><div class="value purple">${users.length}</div></div>`;
+        renderLogEntries(logs.slice(0,10), 'dashLogs');
+    } catch(e) { console.error(e); }
+}
+
+// ===== Logs =====
+async function loadLogs() {
+    const r = await authFetch(BASE+'?act=logs&limit=100');
+    const d = await r.json();
+    if (!d.ok) return;
+    renderLogEntries(d.data||[], 'logList');
+}
+function renderLogEntries(logs, target) {
+    const el = document.getElementById(target);
+    if (!logs.length) { el.innerHTML='<div class="empty">暂无日志</div>'; return; }
+    el.innerHTML = logs.map(l => {
+        const st = l.status||'';
+        const apiTag = `<span class="tag tag-${l.api_type===1?'blue':'info'}">${l.api_type===1?'聚星':'调速'}</span>`;
+        const source = String(l.source||'');
+        const deviceLabel = logDeviceLabel(l);
+        const clientLabel = l.client_label || (source.indexOf('ctrl_')===0 ? '中控' : (source.indexOf('web_')===0 ? '网页插件' : ''));
+        const deviceTag = deviceLabel ? `<span class="tag tag-info">\u8bbe\u5907:${esc(deviceLabel)}</span>` : '';
+        const webTag = clientLabel && clientLabel!==deviceLabel ? `<span class="tag tag-info">${esc(clientLabel)}</span>` : '';
+        let stTag = '';
+        if(st==='success') stTag='<span class="tag tag-success">成功</span>';
+        else if(st==='decrypt_fail'||st==='json_fail') stTag=`<span class="tag tag-danger">${st}</span>`;
+        else if(st) stTag=`<span class="tag tag-warning">${st}</span>`;
+        let body='';
+        if(l.username) body+=`<b>用户:</b><code>${esc(l.username)}</code>${l.account_remark?'<span style="color:var(--danger);font-weight:600;font-size:12px;margin-left:4px">'+esc(l.account_remark)+'</span>':''} `;
+        if(deviceLabel) body+=`<b>\u8bbe\u5907:</b><code>${esc(deviceLabel)}</code> `;
+        if(l.group_id) body+=`<b>组:</b><code>${esc(l.group_id)}</code> `;
+        if(l.task_info) body+=`<b>任务:</b><code>${esc(l.task_info.ID||JSON.stringify(l.task_info))}</code> `;
+        if(l.encrypted_len) body+=`<b>加密:</b><code>${(l.encrypted_len/1024).toFixed(1)}KB</code> `;
+        if(l.decrypted_len) body+=`<b>解密:</b><code>${(l.decrypted_len/1024).toFixed(1)}KB</code> `;
+        if(l.extract_from) body+=`<b>提取:</b><code>${esc(l.extract_from)}</code> `;
+        if(l.timing_ms){
+            const t=l.timing_ms||{};
+            body+='<b>timing:</b><code>'
+                +'total '+(t.total||0)+'ms'
+                +' / decrypt '+(t.aes_decrypt||0)
+                +' / parse '+(t.decrypted_json||0)
+                +' / extract '+(t.extract_response_body||0)
+                +' / dump'+(t.dump||0)
+                +' / forward '+(t.forward||0)
+                +'</code> ';
+        }
+        if(l.forward_attempts&&l.forward_attempts.length>1) body+='<b>retry:</b><code>'+l.forward_attempts.length+'</code> ';
+        let resp='';
+        if(l.response){ const rs=typeof l.response==='string'?l.response:JSON.stringify(l.response,null,2); resp=`<pre class="resp">${esc(rs.substring(0,500))}</pre>`; }
+        if(l.error) resp+=`<pre class="resp" style="color:var(--danger)">${esc(l.error)}</pre>`;
+        const actions=[];
+        if(l.dump_id) actions.push(`<a href="javascript:void(0)" onclick="viewJson('dump','${encodeURIComponent(l.dump_id)}')">解密数据</a>`);
+        if(l.upload_id){
+            actions.push(`<a href="javascript:void(0)" onclick="viewJson('upload','${encodeURIComponent(l.upload_id)}',{field:'response'})">上传响应</a>`);
+            actions.push(`<a href="javascript:void(0)" onclick="viewJson('upload','${encodeURIComponent(l.upload_id)}',{full:1})">上传详情</a>`);
+        }
+        const actionHtml=actions.length?`<div class="log-actions">${actions.join('')}</div>`:'';
+        return `<div class="log-entry"><div class="log-meta">${apiTag} ${deviceTag} ${webTag} ${stTag} <span style="color:var(--muted);font-size:12px">${l.time||''} &nbsp; IP:${l.ip||'-'}</span></div><div class="log-detail">${body}</div>${actionHtml} ${resp}</div>`;
+    }).join('');
+}
+function toggleAutoLog() {
+    const btn=document.getElementById('autoLogBtn');
+    if(autoLogTimer){clearInterval(autoLogTimer);autoLogTimer=null;btn.textContent='自动刷新';btn.className='btn btn-success btn-sm';}
+    else{loadLogs();autoLogTimer=setInterval(loadLogs,5000);btn.textContent='停止刷新';btn.className='btn btn-default btn-sm';}
+}
+async function clearLogs(){
+    if(!confirm('确定清空所有日志和数据?'))return;
+    await authFetch(BASE+'?act=clear');
+    alert('已清空');loadLogs();
+}
+
+// ===== Devices =====
+async function loadDevices() {
+    const r = await authFetch(BASE+'?act=devices');
+    const d = await r.json();
+    if(!d.ok) return;
+    document.getElementById('onlineCount').textContent='('+d.online_count+'台在线)';
+    const el=document.getElementById('deviceList');
+    const devs=d.data||[];
+    if(!devs.length){el.innerHTML='<div class="empty">当前没有在线或已禁用设备</div>';return;}
+
+    // 按账号分组
+    const byUser={};
+    for(const dv of devs){
+        const u=dv.username||'unknown';
+        if(!byUser[u]) byUser[u]={username:u,account_remark:dv.account_remark||'',devices:[],api_type:dv.api_type||0};
+        byUser[u].devices.push(dv);
+        if(dv.account_remark) byUser[u].account_remark=dv.account_remark;
+    }
+    const users=Object.values(byUser).sort((a,b)=>b.devices.length-a.devices.length);
+
+    el.innerHTML=users.map(u=>{
+        const remark=u.account_remark?`<span style="color:var(--danger);font-weight:600;font-size:12px;margin-left:8px">${esc(u.account_remark)}</span>`:'';
+        const allDisabled=u.devices.every(d=>d.disabled);
+        const someDisabled=u.devices.some(d=>d.disabled);
+        const userTag=allDisabled?'<span class="tag tag-danger">全部禁用</span>':someDisabled?'<span class="tag tag-warning">部分禁用</span>':'<span class="tag tag-success">在线</span>';
+        const batchBtn=allDisabled
+            ?`<button class="btn btn-success btn-sm" onclick="toggleUserDevices('${escAttr(u.username)}',0)">全部启用</button>`
+            :`<button class="btn btn-danger btn-sm" onclick="toggleUserDevices('${escAttr(u.username)}',1)">全部禁用</button>`;
+
+        const devRows=u.devices.map(dv=>{
+            const dis=!!dv.disabled;
+            const isOnline=!!dv.online;
+            const st=dis
+                ?`<span class="tag tag-danger" style="font-size:11px">禁用${isOnline?'在线':'离线'}</span>`
+                :`<span class="tag tag-success" style="font-size:11px">${isOnline?'在线':'离线'}</span>`;
+            const deviceLabel=dv.device_label||(String(dv.platform||dv.device_type||'').toLowerCase()==='ios'?'iOS设备':'-');
+            const singleBtn=dis
+                ?`<button class="btn btn-success btn-sm" onclick="toggleDevice('${esc(dv.key)}',0)">启用</button>`
+                :`<button class="btn btn-danger btn-sm" onclick="toggleDevice('${esc(dv.key)}',1)">禁用</button>`;
+            return `<tr>
+                <td>${st}</td>
+                <td>${esc(deviceLabel)} ${esc(dv.fingerprint_name||((dv.fingerprint_id||dv.fingerprint_key||'').substring(0,14))||'-')}</td>
+                <td style="font-size:12px">${esc((dv.device_id||'-').substring(0,14))}</td>
+                <td style="font-size:12px">${esc(dv.ip||'-')}</td>
+                <td style="font-size:12px;color:var(--muted)">${esc((dv.last_seen||'').substring(11)||'-')}</td>
+                <td style="display:flex;gap:6px">${singleBtn}</td>
+            </tr>`;
+        }).join('');
+
+        return `<div class="stats-user">
+            <div class="stats-user-head">
+                <div>
+                    <b style="font-size:15px">${esc(u.username)}</b> ${userTag}${remark}
+                    <div class="stats-records">${u.api_type===1?'聚星':'调速'} 设备数:${u.devices.length} 组:${esc(u.devices[0]?.group_id||'-')}</div>
+                </div>
+                <div style="display:flex;gap:6px">${batchBtn}</div>
+            </div>
+            <table style="margin-top:10px"><thead><tr><th style="width:60px">状态</th><th>指纹</th><th>设备ID</th><th>IP</th><th style="width:70px">心跳</th><th style="width:150px">操作</th></tr></thead><tbody>${devRows}</tbody></table>
+        </div>`;
+    }).join('');
+}
+async function toggleDevice(dk,dis){
+    let reason='';
+    if(dis){reason=prompt('禁用原因（App会显示）','账号已被下线，禁止使用');if(!reason)return;}
+    await authFetch(BASE+'?act=device_toggle&device_key='+encodeURIComponent(dk)+'&disabled='+dis+'&reason='+encodeURIComponent(reason));
+    loadDevices();
+}
+async function toggleUserDevices(username,dis){
+    let reason='';
+    if(dis){reason=prompt('禁用 '+username+' 所有设备的原因','账号已被下线，禁止使用');if(!reason)return;}
+    await authFetch(BASE+'?act=device_toggle_user&username='+encodeURIComponent(username)+'&disabled='+dis+'&reason='+encodeURIComponent(reason));
+    loadDevices();
+}
+
+// ===== Stats =====
+async function loadStats(){
+    const sel=document.getElementById('statsDate');
+    const date=sel.value||'';
+    const r=await authFetch(BASE+'?act=stats'+(date?'&date='+encodeURIComponent(date):''));
+    const d=await r.json();
+    if(!d.ok)return;
+    if(d.dates&&d.dates.length){const cv=sel.value||d.date;sel.innerHTML=d.dates.map(dt=>`<option value="${dt}" ${dt===cv?'selected':''}>${dt}</option>`).join('');}
+    const el=document.getElementById('statsBody');
+    const fps=d.data||[];
+    if(!fps.length){el.innerHTML='<div class="empty">当天暂无指纹记录</div>';return;}
+
+    // 按账号分组
+    const byUser={};
+    for(const fp of fps){
+        const u=fp.username||'unknown';
+        if(!byUser[u]) byUser[u]={username:u,account_remark:fp.account_remark||'',fingerprints:[],total:0,generate:0,write:0};
+        byUser[u].fingerprints.push(fp);
+        byUser[u].total+=fp.total||0;
+        byUser[u].generate+=fp.generate||0;
+        byUser[u].write+=fp.write||0;
+        if(fp.account_remark) byUser[u].account_remark=fp.account_remark;
+    }
+    const users=Object.values(byUser).sort((a,b)=>b.total-a.total);
+    const totalGen=fps.reduce((s,u)=>s+(u.generate||0),0);
+    const totalWrite=fps.reduce((s,u)=>s+(u.write||0),0);
+
+    let html=`<div class="stat-row" style="margin-bottom:16px">
+        <div class="stat-card"><div class="label">日期</div><div class="value" style="font-size:18px">${esc(d.date)}</div></div>
+        <div class="stat-card"><div class="label">活跃账号</div><div class="value blue">${users.length}</div></div>
+        <div class="stat-card"><div class="label">生成指纹</div><div class="value purple">${totalGen}</div></div>
+        <div class="stat-card"><div class="label">写入指纹(v32)</div><div class="value green">${totalWrite}</div></div>
+    </div>`;
+
+    html+=users.map(u=>{
+        const remark=u.account_remark?` <span style="color:var(--danger);font-weight:600">${esc(u.account_remark)}</span>`:'';
+
+        // 指纹明细表格
+        let fpTable='';
+        if(u.fingerprints.length>0){
+            fpTable=`<table style="margin-top:10px"><thead><tr><th>指纹名称</th><th>指纹ID</th><th>设备ID</th><th style="text-align:center">生成</th><th style="text-align:center">写入</th><th style="text-align:center">总计</th><th>最后活跃</th></tr></thead><tbody>`;
+            for(const fp of u.fingerprints.sort((a,b)=>b.total-a.total)){
+                const fpName=fp.fingerprint_name||'-';
+                const fpId=(fp.fingerprint_id||fp.fingerprint_key||'-').substring(0,20);
+                const devId=(fp.device_id||'-').substring(0,14);
+                fpTable+=`<tr>
+                    <td><b>${esc(fpName)}</b></td>
+                    <td><code style="font-size:11px">${esc(fpId)}</code></td>
+                    <td style="font-size:12px">${esc(devId)}</td>
+                    <td style="text-align:center;color:var(--info)">${fp.generate||0}</td>
+                    <td style="text-align:center;color:var(--success)">${fp.write||0}</td>
+                    <td style="text-align:center"><b>${fp.total||0}</b></td>
+                    <td style="font-size:12px;color:var(--muted)">${esc(fp.last_seen||'-')}</td>
+                </tr>`;
+            }
+            fpTable+='</tbody></table>';
+        }
+
+        // 最近操作记录
+        const allRec=u.fingerprints.flatMap(fp=>(fp.records||[]).map(r=>({...r,fp_name:fp.fingerprint_name||fp.fingerprint_id||''})));
+        allRec.sort((a,b)=>b.time.localeCompare(a.time));
+        const last8=allRec.slice(0,8).map(r=>
+            `<span class="tag ${r.event==='write'?'tag-success':'tag-blue'}" style="margin-right:4px">${r.time} ${r.event==='write'?'写入':'生成'}${r.fp_name?' '+esc(r.fp_name.substring(0,10)):''}</span>`
+        ).join('');
+
+        return `<div class="stats-user">
+            <div class="stats-user-head">
+                <div><b style="font-size:15px">${esc(u.username)}</b>${remark}
+                    <div class="stats-records">指纹数:${u.fingerprints.length} 组:${esc(u.fingerprints[0]?.group_id||'-')}</div>
+                </div>
+                <div class="stats-nums">
+                    <span>总计 <b>${u.total}</b></span>
+                    <span style="color:var(--info)">生成 <b>${u.generate}</b></span>
+                    <span style="color:var(--success)">写入 <b>${u.write}</b></span>
+                </div>
+            </div>
+            ${fpTable}
+            ${last8?`<div class="stats-records" style="margin-top:8px">${last8}</div>`:''}
+        </div>`;
+    }).join('');
+    el.innerHTML=html;
+}
+
+async function clearStats(){
+    const sel=document.getElementById('statsDate');
+    const date=sel.value||'';
+    if(!confirm('确定清除 '+(date||'今天')+' 的指纹环境统计?'))return;
+    const r=await authFetch(BASE+'?act=clear_stats'+(date?'&date='+encodeURIComponent(date):''));
+    const d=await r.json();
+    if(!d.ok) return alert(d.msg||'清除失败');
+    loadStats();
+}
+
+// ===== API Accounts =====
+let api1Data=[];
+let extAccountData=[], extServerBaseUrl='';
+let acctModalMode='', acctEditApiType=0, acctEditUsername='';
+const accountPager={1:{page:1,size:10},2:{page:1,size:10},3:{page:1,size:10}};
+const accountSelection={1:new Set(),2:new Set(),3:new Set()};
+
+function accountDataByType(apiType){
+    return api1Data;
+}
+
+function accountTargetByType(apiType){
+    return 'api1Table';
+}
+
+function updateBatchDeleteButton(apiType){
+    const btn=document.getElementById('batchDelete'+apiType);
+    if(!btn)return;
+    const count=accountSelection[apiType]?.size||0;
+    btn.disabled=count<=0;
+    btn.textContent=count>0?'批量删除('+count+')':'批量删除';
+}
+
+function syncAccountSelection(apiType){
+    const data=accountDataByType(apiType);
+    const valid=new Set(data.map(a=>a.username||a));
+    for(const name of [...accountSelection[apiType]]) if(!valid.has(name)) accountSelection[apiType].delete(name);
+    updateBatchDeleteButton(apiType);
+}
+
+function setAccountPage(apiType,page){
+    const data=accountDataByType(apiType);
+    const pager=accountPager[apiType];
+    const totalPages=Math.max(1,Math.ceil(data.length/pager.size));
+    pager.page=Math.min(Math.max(1,page),totalPages);
+    renderAccountTable(data,accountTargetByType(apiType),apiType);
+}
+
+function setAccountPageSize(apiType,size){
+    const pager=accountPager[apiType];
+    pager.size=Math.max(5,parseInt(size,10)||10);
+    pager.page=1;
+    renderAccountTable(accountDataByType(apiType),accountTargetByType(apiType),apiType);
+}
+
+async function loadApi1Accounts(){
+    const [r1,r5]=await Promise.all([
+        authFetch(BASE+'?act=api1_accounts').then(r=>r.json()),
+        authFetch(BASE+'?act=decoded_ext_accounts').then(r=>r.json())
+    ]);
+    if(r1.ok){ api1Data=r1.data||[]; syncAccountSelection(1); renderAccountTable(api1Data,'api1Table',1); }
+    if(r5.ok){ extAccountData=r5.data||[]; extServerBaseUrl=r5.serverBaseUrl||BASE; renderExtAccountTable(); }
+    const api1Count=document.getElementById('api1Count');
+    if(api1Count) api1Count.textContent='('+api1Data.length+'个)';
+}
+function formatTaskAccountNames(names, count, disabledNames='', disabledCount=0, totalCount=0){
+    const list=String(names||'').split(',').map(s=>s.trim()).filter(Boolean);
+    const total=Number(count||list.length||0);
+    const shown=list.slice(0,10);
+    const hidden=Math.max(0,total-shown.length);
+    const text=shown.join(', ')+(hidden>0?` ? ${hidden} ?`:'');
+    const disabledList=String(disabledNames||'').split(',').map(s=>s.trim()).filter(Boolean);
+    const disabledTotal=Number(disabledCount||disabledList.length||0);
+    const disabledShown=disabledList.slice(0,8).join(', ');
+    const allTotal=Number(totalCount||total+disabledTotal||0);
+    const disabledHtml=disabledTotal>0?`<div style="font-size:12px;color:var(--danger);margin-top:4px">????? ${disabledTotal} ??${esc(disabledShown)}${disabledTotal>8?' ? '+(disabledTotal-8)+' ?':''}</div>`:'';
+    return `<code title="${escAttr(list.join(', '))}" style="display:block;max-width:720px;white-space:normal;word-break:break-word;line-height:1.7">${esc(text||'-')}</code><div style="font-size:12px;color:var(--muted);margin-top:4px">???? ${total} / ?? ${allTotal}${hidden>0?'???? '+hidden+' ?':''}</div>${disabledHtml}`;
+}
+function renderExtAccountTable(){
+    const el=document.getElementById('extAccountTable');
+    if(!el)return;
+    document.getElementById('extAccountCount').textContent='('+extAccountData.length+'\u4e2a)';
+    if(!extAccountData.length){el.innerHTML='<div class="empty">??????</div>';return;}
+    el.innerHTML=`<table><thead><tr><th>#</th><th>??ID</th><th>??Token</th><th>????</th><th style="width:82px;text-align:center">??</th><th>??</th><th>??</th><th style="width:440px">??</th></tr></thead><tbody>${
+        extAccountData.map((a,i)=>`<tr>
+            <td>${i+1}</td>
+            <td><code>${esc(a.accountId)}</code></td>
+            <td><code>${esc((a.token||'').slice(0,10)+'...'+(a.token||'').slice(-6))}</code></td>
+            <td>${formatTaskAccountNames(a.api1_usernames,a.api1_count,a.api1_disabled_usernames,a.api1_disabled_count,a.api1_total_count)}</td>
+            <td style="text-align:center">${a.task_mode==='concurrent'?'<span class="tag tag-success">?? '+(a.task_parallelism||a.api1_count||1)+'</span>':'<span class="tag tag-blue">??</span>'}</td>
+            <td>${a.enabled?'<span class="tag tag-success">??</span>':'<span class="tag tag-danger">??</span>'}</td>
+            <td>${esc(a.remark||'-')}</td>
+            <td>
+                <button class="btn btn-primary btn-sm" onclick="copyExtConfig('${escAttr(a.accountId)}')">????</button>
+                <button class="btn btn-success btn-sm" onclick="copyParallelControlLink('${escAttr(a.accountId)}')">??????</button>
+                <button class="btn btn-info btn-sm" onclick="showExtAccountModal('${escAttr(a.accountId)}')">??</button>
+                <button class="btn btn-warning btn-sm" onclick="toggleExtAccount('${escAttr(a.accountId)}',${a.enabled?0:1})">${a.enabled?'??':'??'}</button>
+                <button class="btn btn-default btn-sm" onclick="resetExtToken('${escAttr(a.accountId)}')">??Token</button>
+                <button class="btn btn-default btn-sm" onclick="resetParallelControlLink('${escAttr(a.accountId)}')">??????</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteExtAccount('${escAttr(a.accountId)}')">??</button>
+            </td>
+        </tr>`).join('')
+    }</tbody></table>`;
+}
+function extAccountById(accountId){
+    return extAccountData.find(a=>a.accountId===accountId)||null;
+}
+
+function extSelectedDisabledTaskUsers(){
+    return [...document.querySelectorAll('#extDisabledTaskAccounts input[type="checkbox"]:checked')]
+        .map(el => (el.value || '').trim())
+        .filter(Boolean);
+}
+
+function renderExtDisabledTaskAccounts(selected){
+    const host=document.getElementById('extDisabledTaskAccounts');
+    if(!host)return;
+    const rows=parseExtTaskAccountLines(document.getElementById('extApi1Accounts')?.value||'');
+    const picked=new Set((selected||[]).map(x=>String(x||'').trim()).filter(Boolean));
+    const seen=new Set();
+    const list=[];
+    for(const row of rows){
+        const username=String(row.username||'').trim();
+        if(!username || seen.has(username)) continue;
+        seen.add(username);
+        list.push({username, remark:String(row.remark||'').trim()});
+    }
+    if(!list.length){
+        host.innerHTML='<div style="font-size:12px;color:var(--muted);line-height:1.6">?????????????????????????????</div>';
+        return;
+    }
+    host.innerHTML=list.map((item,idx)=>`<label style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;cursor:pointer">
+        <input type="checkbox" value="${escAttr(item.username)}" ${picked.has(item.username)?'checked':''}>
+        <span style="font-family:monospace;font-size:13px;word-break:break-all">${esc(item.username)}</span>
+        ${item.remark?`<span style="font-size:12px;color:var(--muted)">(${esc(item.remark)})</span>`:''}
+    </label>`).join('');
+}
+function extConfigText(a){
+    return JSON.stringify({
+        serverBaseUrl: extServerBaseUrl||BASE,
+        accountId: a.accountId,
+        token: a.token,
+        idleDelayMs: 5000,
+        errorDelayMs: 4000,
+        captureTimeoutMs: 180000,
+        deadlineBufferMs: 5000
+    },null,2);
+}
+
+async function copyText(text){
+    try{ await navigator.clipboard.writeText(text); alert('已复制'); }
+    catch(e){ prompt('复制下面内容',text); }
+}
+
+function copyExtConfig(accountId){
+    const a=extAccountById(accountId);
+    if(!a)return alert('未找到账号');
+    copyText(extConfigText(a));
+}
+
+function parallelControlLinkText(a){
+    if(a?.parallel_control_url)return a.parallel_control_url;
+    if(a?.parallel_control_token)return '?act=parallel_control&t='+encodeURIComponent(a.parallel_control_token);
+    return '';
+}
+
+function copyParallelControlLink(accountId){
+    const a=extAccountById(accountId);
+    if(!a)return alert('未找到账号');
+    const link=parallelControlLinkText(a);
+    if(!link)return alert('该账号还没有控制链接，请刷新账号列表后再试');
+    copyText(link);
+}
+
+function showExtAccountModal(accountId){
+    const a=accountId?extAccountById(accountId):null;
+    const accountLines=(a?.api1_accounts||[]).map(x=>`${x.username||''}||${x.remark||''}`).join('\n');
+    const disabledTaskUsers=(a?.api1_accounts||[]).filter(x=>!x.enabled).map(x=>x.username||'').filter(Boolean);
+    const taskParallelism=Math.max(1,parseInt(a?.task_parallelism||a?.api1_count||1,10)||1);
+    acctModalMode=accountId?'extEdit':'extAdd';
+    acctEditUsername=accountId||'';
+    document.getElementById('acctModalTitle').textContent=accountId?'??????':'??????';
+    document.getElementById('acctModalBody').innerHTML=`
+        <div class="form-item" style="margin-bottom:12px"><label>??ID</label><input id="extAccountId" value="${escAttr(a?.accountId||'')}" placeholder="??????" ${a?'disabled':''} style="height:40px;border:2px solid #e2e8f0;border-radius:8px;padding:0 12px;font-size:14px;width:100%;background:#f8fafc"></div>
+        <div class="form-item" style="margin-bottom:12px"><label>?????</label><select id="extTaskMode" style="height:40px;border:2px solid #e2e8f0;border-radius:8px;padding:0 12px;font-size:14px;width:100%;background:#f8fafc;font-family:var(--font)"><option value="poll" ${(a?.task_mode||'poll')==='poll'?'selected':''}>??</option><option value="concurrent" ${(a?.task_mode||'poll')==='concurrent'?'selected':''}>??</option></select></div>
+        <div class="form-item" style="margin-bottom:12px"><label>????</label><input id="extTaskParallelism" type="number" min="1" step="1" value="${taskParallelism}" placeholder="?? 5" style="height:40px;border:2px solid #e2e8f0;border-radius:8px;padding:0 12px;font-size:14px;width:100%;background:#f8fafc"><div style="font-size:12px;color:var(--muted);margin-top:6px">?????????????? 10 ??????? 5 ??????/?? 5 ??</div></div>
+        <div class="form-item" style="margin-bottom:12px"><label>?????????????????? ???? ??????? Tab????|??????</label><textarea id="extApi1Accounts" rows="8" placeholder="task_user1&#9;task_pass1&#10;task_user2|task_pass2|??2" style="height:180px;width:100%;border:2px solid #e2e8f0;border-radius:8px;padding:10px 12px;font-size:14px;resize:vertical;font-family:monospace;background:#f8fafc">${esc(accountLines)}</textarea><div style="font-size:12px;color:var(--muted);margin-top:6px">??????????????????task_user1||??1</div></div>
+        <div class="form-item" style="margin-bottom:12px"><label>??????????????????</label><div id="extDisabledTaskAccounts" style="display:grid;gap:8px;margin-top:8px"></div><div style="font-size:12px;color:var(--muted);margin-top:6px">?????????????????????</div></div>
+        <div class="form-item"><label>??</label><input id="extRemark" value="${escAttr(a?.remark||'')}" placeholder="????" style="height:40px;border:2px solid #e2e8f0;border-radius:8px;padding:0 12px;font-size:14px;width:100%;background:#f8fafc"></div>`;
+    const extApi1AccountsEl=document.getElementById('extApi1Accounts');
+    if(extApi1AccountsEl){
+        extApi1AccountsEl.addEventListener('input', ()=>renderExtDisabledTaskAccounts(extSelectedDisabledTaskUsers()));
+    }
+    renderExtDisabledTaskAccounts(disabledTaskUsers);
+    document.getElementById('accountModal').classList.remove('hidden');
+}
+function showExtBatchModal(){
+    acctModalMode='extBatch';
+    document.getElementById('acctModalTitle').textContent='????????';
+    document.getElementById('acctModalBody').innerHTML=`
+        <div class="form-item"><label>????????? ???? ????? Tab????|??????</label>
+        <textarea id="extBatchInput" rows="10" placeholder="user1&#9;pass1&#10;user2|pass2|??2" style="height:220px;width:100%;border:2px solid #e2e8f0;border-radius:8px;padding:10px 12px;font-size:14px;resize:vertical;font-family:monospace;background:#f8fafc"></textarea></div>`;
+    document.getElementById('accountModal').classList.remove('hidden');
+}
+
+function parseExtTaskAccountLines(text){
+    return String(text||'').split(/\r?\n/).map(line=>{
+        const trimmed=line.trim();
+        if(!trimmed)return null;
+        let parts, joiner=' ';
+        const normalized=trimmed.replace(/\uFF5C/g,'|');
+        if(normalized.includes('|')){ parts=normalized.split('|'); joiner='|'; }
+        else if(/\t/.test(trimmed)){ parts=trimmed.split(/\t+/); joiner=' '; }
+        else if(/[\uFF0C,]/.test(trimmed)){ parts=trimmed.split(/[\uFF0C,]/); joiner=','; }
+        else if(/[\uFF1B;]/.test(trimmed)){ parts=trimmed.split(/[\uFF1B;]/); joiner=';'; }
+        else parts=trimmed.split(/\s+/);
+        return {
+            username:(parts[0]||'').trim(),
+            password:(parts[1]||'').trim(),
+            remark:(parts.slice(2).join(joiner)||'').trim(),
+            enabled:true
+        };
+    }).filter(x=>x&&x.username);
+}
+
+async function saveExtAccountFromModal(){
+    const disabled=new Set(extSelectedDisabledTaskUsers());
+    const accounts=parseExtTaskAccountLines(document.getElementById('extApi1Accounts')?.value||'').map(row=>({
+        ...row,
+        enabled:!disabled.has(row.username)
+    }));
+    const payload={
+        accountId:(document.getElementById('extAccountId')?.value||acctEditUsername||'').trim(),
+        api1_accounts:accounts,
+        task_mode:(document.getElementById('extTaskMode')?.value||'poll').trim(),
+        task_parallelism:Math.max(1,parseInt(document.getElementById('extTaskParallelism')?.value||'1',10)||1),
+        remark:(document.getElementById('extRemark')?.value||'').trim(),
+        enabled:true
+    };
+    const r=await authFetch(BASE+'?act=decoded_ext_account_save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const d=await r.json();
+    if(!d.ok)return alert(d.msg||'????');
+    closeAccountModal();
+    await loadApi1Accounts();
+    if(d.account) copyText(extConfigText(d.account));
+}
+async function saveExtBatchFromModal(){
+    const batch=(document.getElementById('extBatchInput')?.value||'').trim();
+    if(!batch)return alert('??????????');
+    const r=await authFetch(BASE+'?act=decoded_ext_account_batch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({batch})});
+    const d=await r.json();
+    if(!d.ok)return alert(d.msg||'??????');
+    closeAccountModal();
+    await loadApi1Accounts();
+    const text=(d.created||[]).map(a=>extConfigText(a)).join('\n\n');
+    if(text) copyText(text);
+}
+
+async function toggleExtAccount(accountId,enabled){
+    await authFetch(BASE+'?act=decoded_ext_account_toggle&accountId='+encodeURIComponent(accountId)+'&enabled='+enabled);
+    loadApi1Accounts();
+}
+
+async function resetExtToken(accountId){
+    if(!confirm('重置后旧插件 token 会失效，确定继续？'))return;
+    await authFetch(BASE+'?act=decoded_ext_account_token&accountId='+encodeURIComponent(accountId));
+    loadApi1Accounts();
+}
+
+async function resetParallelControlLink(accountId){
+    if(!confirm('重置后旧的用户控制链接会失效，确定继续？'))return;
+    await authFetch(BASE+'?act=decoded_ext_account_parallel_token&accountId='+encodeURIComponent(accountId));
+    await loadApi1Accounts();
+    alert('控制链接已重置，请重新复制发给用户');
+}
+
+async function deleteExtAccount(accountId){
+    if(!confirm('确定删除插件账号 '+accountId+' ?'))return;
+    await authFetch(BASE+'?act=decoded_ext_account_delete&accountId='+encodeURIComponent(accountId));
+    loadApi1Accounts();
+}
+
+function parseAccountBatchLine(line){
+    const trimmed=String(line||'').trim();
+    if(!trimmed)return null;
+    let parts, joiner=' ';
+    const normalized=trimmed.replace(/\uFF5C/g,'|');
+    if(normalized.includes('|')){ parts=normalized.split('|'); joiner='|'; }
+    else if(/\t/.test(trimmed)){ parts=trimmed.split(/\t+/); }
+    else if(/[\uFF0C,]/.test(trimmed)){ parts=trimmed.split(/[\uFF0C,]/); joiner=','; }
+    else if(/[\uFF1B;]/.test(trimmed)){ parts=trimmed.split(/[\uFF1B;]/); joiner=';'; }
+    else parts=trimmed.split(/\s+/);
+    const name=(parts[0]||'').trim();
+    const remark=(parts.slice(1).join(joiner)||'').trim();
+    return name?{username:name,remark}:null;
+}
+
+function toggleAccountSelection(apiType,username,checked){
+    if(checked) accountSelection[apiType].add(username);
+    else accountSelection[apiType].delete(username);
+    updateBatchDeleteButton(apiType);
+}
+
+function toggleAccountPageSelection(apiType,checked){
+    const pager=accountPager[apiType]||{page:1,size:10};
+    const data=accountDataByType(apiType);
+    const start=(pager.page-1)*pager.size;
+    data.slice(start,start+pager.size).forEach(a=>{
+        const name=a.username||a;
+        if(checked) accountSelection[apiType].add(name);
+        else accountSelection[apiType].delete(name);
+    });
+    renderAccountTable(data,accountTargetByType(apiType),apiType);
+}
+
+function renderAccountTable(accounts, targetId, apiType){
+    const el=document.getElementById(targetId);
+    const label=apiType===3?'编号':'账号';
+    if(!accounts.length){accountSelection[apiType]?.clear();updateBatchDeleteButton(apiType);el.innerHTML='<div class="empty">暂无'+label+'</div>';return;}
+    el.innerHTML=`<table><thead><tr><th style="width:50px">#</th><th>${label}</th><th>备注</th><th style="width:78px;text-align:center">修改</th><th style="width:78px;text-align:center">操作</th></tr></thead><tbody>${
+        accounts.map((a,i)=>{
+            const name=a.username||a;
+            const remark=a.remark||'';
+            return `<tr><td>${i+1}</td><td><code>${esc(name)}</code></td><td>${esc(remark||'-')}</td><td style="text-align:center">
+                <button class="btn btn-info btn-sm" style="min-width:46px;padding:4px 10px" onclick="showEditAccountRemark(${apiType},'${escAttr(name)}')">修改</button>
+            </td><td style="text-align:center">
+                <button class="btn btn-danger btn-sm" style="min-width:46px" onclick="deleteAccount(${apiType},'${escAttr(name)}')">删除</button>
+            </td></tr>`;
+        }).join('')
+    }</tbody></table>`;
+}
+
+function renderAccountTable(accounts, targetId, apiType){
+    const el=document.getElementById(targetId);
+    const label=apiType===3?'编号':'账号';
+    if(!accounts.length){accountSelection[apiType]?.clear();updateBatchDeleteButton(apiType);el.innerHTML='<div class="empty">暂无'+label+'</div>';return;}
+    const pager=accountPager[apiType]||{page:1,size:10};
+    const total=accounts.length;
+    const totalPages=Math.max(1,Math.ceil(total/pager.size));
+    pager.page=Math.min(Math.max(1,pager.page),totalPages);
+    const start=(pager.page-1)*pager.size;
+    const pageRows=accounts.slice(start,start+pager.size);
+    const from=start+1;
+    const to=Math.min(start+pager.size,total);
+    const selected=accountSelection[apiType]||new Set();
+    const pageAllChecked=pageRows.length>0&&pageRows.every(a=>selected.has(a.username||a));
+    el.innerHTML=`<table><thead><tr><th style="width:42px;text-align:center"><input type="checkbox" ${pageAllChecked?'checked':''} onchange="toggleAccountPageSelection(${apiType},this.checked)"></th><th style="width:50px">#</th><th>${label}</th><th>备注</th><th style="width:78px;text-align:center">修改</th><th style="width:78px;text-align:center">操作</th></tr></thead><tbody>${
+        pageRows.map((a,i)=>{
+            const name=a.username||a;
+            const remark=a.remark||'';
+            const checked=selected.has(name)?'checked':'';
+            return `<tr><td style="text-align:center"><input type="checkbox" ${checked} onchange="toggleAccountSelection(${apiType},'${escAttr(name)}',this.checked)"></td><td>${start+i+1}</td><td><code>${esc(name)}</code></td><td>${esc(remark||'-')}</td><td style="text-align:center">
+                <button class="btn btn-info btn-sm" style="min-width:46px;padding:4px 10px" onclick="showEditAccountRemark(${apiType},'${escAttr(name)}')">修改</button>
+            </td><td style="text-align:center">
+                <button class="btn btn-danger btn-sm" style="min-width:46px" onclick="deleteAccount(${apiType},'${escAttr(name)}')">删除</button>
+            </td></tr>`;
+        }).join('')
+    }</tbody></table>
+    <div class="account-pager">
+        <div class="account-pager-info">Showing ${from}-${to} / ${total}, page ${pager.page} / ${totalPages}</div>
+        <div class="account-pager-actions">
+            <span class="account-pager-info">Per page</span>
+            <select class="account-page-size" onchange="setAccountPageSize(${apiType},this.value)">
+                ${[10,20,50,100].map(n=>`<option value="${n}" ${pager.size===n?'selected':''}>${n}</option>`).join('')}
+            </select>
+            <button class="btn btn-default btn-sm" ${pager.page<=1?'disabled':''} onclick="setAccountPage(${apiType},1)">First</button>
+            <button class="btn btn-default btn-sm" ${pager.page<=1?'disabled':''} onclick="setAccountPage(${apiType},${pager.page-1})">Prev</button>
+            <button class="btn btn-default btn-sm" ${pager.page>=totalPages?'disabled':''} onclick="setAccountPage(${apiType},${pager.page+1})">Next</button>
+            <button class="btn btn-default btn-sm" ${pager.page>=totalPages?'disabled':''} onclick="setAccountPage(${apiType},${totalPages})">Last</button>
+        </div>
+    </div>`;
+    updateBatchDeleteButton(apiType);
+}
+
+function showAddAccount(apiType){
+    acctModalMode='add'+apiType;
+    const title=apiType===3?'添加接口2编号备注':'添加接口'+apiType+'账号';
+    const label=apiType===3?'编号':'账号';
+    document.getElementById('acctModalTitle').textContent=title;
+    document.getElementById('acctModalBody').innerHTML=`
+        <div class="form-item" style="margin-bottom:12px"><label>${label}</label><input id="acctInputName" placeholder="输入${label}" style="height:40px;border:2px solid #e2e8f0;border-radius:8px;padding:0 12px;font-size:14px;width:100%;background:#f8fafc;font-family:var(--font);transition:all .2s"></div>
+        <div class="form-item"><label>备注</label><input id="acctInputRemark" placeholder="备注（可选）" style="height:40px;border:2px solid #e2e8f0;border-radius:8px;padding:0 12px;font-size:14px;width:100%;background:#f8fafc;font-family:var(--font);transition:all .2s"></div>`;
+    document.getElementById('accountModal').classList.remove('hidden');
+    setTimeout(()=>{const inp=document.getElementById('acctInputName');if(inp)inp.focus();},100);
+}
+
+function showBatchAdd(apiType){
+    acctModalMode='batch'+apiType;
+    const title=apiType===3?'批量添加接口2编号备注':'批量添加接口'+apiType+'账号';
+    const label=apiType===3?'编号':'账号';
+    const sample=apiType===3?'7000\t张三\n7029|李四\n7030,王五':'user1\t备注1\nuser2|备注2\nuser3,备注3\nuser4;备注4';
+    document.getElementById('acctModalTitle').textContent=title;
+    document.getElementById('acctModalBody').innerHTML=`
+        <div class="form-item"><label>每行一个${label}，自动识别 Tab、空格、|、逗号、分号：${label} 备注</label>
+        <textarea id="acctBatchInput" rows="10" placeholder="${sample}" style="height:220px;width:100%;border:2px solid #e2e8f0;border-radius:8px;padding:10px 12px;font-size:14px;resize:vertical;font-family:monospace;background:#f8fafc;transition:all .2s"></textarea></div>`;
+    document.getElementById('accountModal').classList.remove('hidden');
+    setTimeout(()=>{const inp=document.getElementById('acctBatchInput');if(inp)inp.focus();},100);
+}
+
+function showEditAccountRemark(apiType, username){
+    acctModalMode='edit';
+    acctEditApiType=apiType;
+    acctEditUsername=username;
+    const label=apiType===3?'编号':'账号';
+    const data=api1Data;
+    const item=data.find(a=>(a.username||a)===username) || {};
+    document.getElementById('acctModalTitle').textContent='修改备注';
+    document.getElementById('acctModalBody').innerHTML=`
+        <div class="form-item" style="margin-bottom:12px"><label>${label}</label><input value="${escAttr(username)}" disabled style="height:40px;border:2px solid #e2e8f0;border-radius:8px;padding:0 12px;font-size:14px;width:100%;background:#f1f5f9;color:#64748b;font-family:var(--font)"></div>
+        <div class="form-item"><label>备注</label><input id="acctEditRemark" value="${escAttr(item.remark||'')}" placeholder="留空则清除备注" style="height:40px;border:2px solid #e2e8f0;border-radius:8px;padding:0 12px;font-size:14px;width:100%;background:#f8fafc;font-family:var(--font);transition:all .2s"></div>`;
+    document.getElementById('accountModal').classList.remove('hidden');
+    setTimeout(()=>{const inp=document.getElementById('acctEditRemark');if(inp){inp.focus();inp.select();}},100);
+}
+
+function closeAccountModal(){
+    document.getElementById('accountModal').classList.add('hidden');
+    acctModalMode='';
+    acctEditApiType=0;
+    acctEditUsername='';
+}
+
+async function acctModalConfirm(){
+    if(acctModalMode==='extAdd'||acctModalMode==='extEdit'){
+        await saveExtAccountFromModal();
+        return;
+    }
+    if(acctModalMode==='extBatch'){
+        await saveExtBatchFromModal();
+        return;
+    }
+    if(acctModalMode.startsWith('add')){
+        const apiType=parseInt(acctModalMode.replace('add',''));
+        const label=apiType===3?'编号':'账号';
+        const name=(document.getElementById('acctInputName').value||'').trim();
+        const remark=(document.getElementById('acctInputRemark').value||'').trim();
+        if(!name) return alert('请输入'+label);
+        const data=api1Data;
+        if(data.some(a=>(a.username||a)===name)) return alert(label+'已存在');
+        data.push({username:name,remark:remark});
+        await saveAccountList(apiType,data);
+    }else if(acctModalMode.startsWith('batch')){
+        const apiType=parseInt(acctModalMode.replace('batch',''));
+        const label=apiType===3?'编号':'账号';
+        const text=(document.getElementById('acctBatchInput').value||'').trim();
+        if(!text) return alert('请输入'+label);
+        const data=[...api1Data];
+        const existingNames=new Set(data.map(a=>a.username||a));
+        let added=0;
+        for(const line of text.split(/\r?\n/)){
+            const parsed=parseAccountBatchLine(line);
+            if(parsed&&!existingNames.has(parsed.username)){
+                data.push(parsed);
+                existingNames.add(parsed.username);
+                added++;
+            }
+        }
+        api1Data=data;
+        await saveAccountList(apiType,data);
+        alert('已添加 '+added+' 个'+label);
+    }else if(acctModalMode==='edit'){
+        const apiType=acctEditApiType;
+        const username=acctEditUsername;
+        const remark=(document.getElementById('acctEditRemark').value||'').trim();
+        let data=[...api1Data];
+        let found=false;
+        data=data.map(a=>{
+            const name=a.username||a;
+            if(name!==username) return a;
+            found=true;
+            return {username:name,remark:remark};
+        });
+        if(!found) return alert('未找到要修改的账号');
+        api1Data=data;
+        await saveAccountList(apiType,data);
+    }
+    closeAccountModal();
+    loadApi1Accounts();
+}
+
+async function deleteAccount(apiType,username){
+    const label=apiType===3?'编号':'账号';
+    if(!confirm('确定删除'+label+' '+username+' ?')) return;
+    let data=api1Data;
+    data=data.filter(a=>(a.username||a)!==username);
+    accountSelection[apiType].delete(username);
+    api1Data=data;
+    await saveAccountList(apiType,data);
+    loadApi1Accounts();
+}
+
+async function deleteSelectedAccounts(apiType){
+    const label=apiType===3?'编号':'账号';
+    const selected=[...(accountSelection[apiType]||new Set())];
+    if(!selected.length)return;
+    if(!confirm('确定批量删除 '+selected.length+' 个'+label+'？'))return;
+    let data=api1Data;
+    const selectedSet=new Set(selected);
+    data=data.filter(a=>!selectedSet.has(a.username||a));
+    accountSelection[apiType].clear();
+    api1Data=data;
+    await saveAccountList(apiType,data);
+    updateBatchDeleteButton(apiType);
+    loadApi1Accounts();
+}
+
+async function saveAccountList(apiType,data){
+    const text=data.map(a=>(a.username||a)+(a.remark?'|'+a.remark:'')).join('\n');
+    const act='save_api1_accounts';
+    await authFetch(BASE+'?act='+act+'&accounts='+encodeURIComponent(text));
+}
+
+// ===== Version Control =====
+let vcBlockedVersions={};
+
+async function loadVerCtrl(){
+    const r=await authFetch(BASE+'?act=version_controls');
+    const d=await r.json();
+    if(!d.ok)return;
+    const c=d.data||{};
+    document.getElementById('vcMinCode').value=c.min_version_code||0;
+    document.getElementById('vcMinMsg').value=c.min_version_msg||'';
+    document.getElementById('api2LoginMin').value=(c.api2_login_min!==undefined?c.api2_login_min:0);
+    document.getElementById('api2LoginMax').value=c.api2_login_max||10000;
+    vcBlockedVersions=c.blocked_versions||{};
+    document.getElementById('vcResult').textContent=c.updated_at?'上次保存: '+c.updated_at:'';
+    renderBlockedVersions();
+}
+
+function renderBlockedVersions(){
+    const el=document.getElementById('blockedVerList');
+    const keys=Object.keys(vcBlockedVersions).sort((a,b)=>Number(a)-Number(b));
+    if(!keys.length){el.innerHTML='<div class="empty">暂无单独停用的版本</div>';return;}
+    el.innerHTML=`<table><thead><tr><th style="width:50px">#</th><th>版本号 (versionCode)</th><th>停用提示语</th><th style="width:70px">操作</th></tr></thead><tbody>${
+        keys.map((k,i)=>{
+            const v=vcBlockedVersions[k];
+            const msg=typeof v==='object'?(v.message||''):(typeof v==='string'?v:'');
+            return `<tr><td>${i+1}</td><td><b>${esc(k)}</b></td><td>${esc(msg||'此版本已停用，请更新')}</td><td><button class="btn btn-success btn-sm" onclick="removeBlockedVer('${escAttr(k)}')">移除</button></td></tr>`;
+        }).join('')
+    }</tbody></table>`;
+}
+
+function showAddBlockedVer(){
+    const code=prompt('输入要停用的版本号 (versionCode)','');
+    if(!code||isNaN(Number(code)))return;
+    const msg=prompt('停用提示语（App会显示给用户）','此版本已停用，请更新到最新版本');
+    if(msg===null)return;
+    vcBlockedVersions[String(Number(code))]={message:msg};
+    renderBlockedVersions();
+}
+
+function removeBlockedVer(code){
+    if(!confirm('确定移除版本 '+code+' 的停用限制？'))return;
+    delete vcBlockedVersions[code];
+    renderBlockedVersions();
+}
+
+async function saveVerCtrl(){
+    const minCode=document.getElementById('vcMinCode').value||'0';
+    const minMsg=document.getElementById('vcMinMsg').value||'';
+    const api2Min=document.getElementById('api2LoginMin').value||'0';
+    const api2Max=document.getElementById('api2LoginMax').value||'10000';
+    document.getElementById('vcResult').textContent='保存中...';
+    const params=new URLSearchParams({
+        act:'save_version_controls',
+        min_version_code:minCode,min_version_msg:minMsg,
+        api2_login_min:api2Min,api2_login_max:api2Max,
+        blocked_versions:JSON.stringify(vcBlockedVersions)
+    });
+    const r=await authFetch(BASE+'?'+params.toString());
+    const d=await r.json();
+    document.getElementById('vcResult').textContent=d.msg||(d.ok?'已保存':'保存失败');
+    if(d.ok&&d.data) updateApi2RangeTip(d.data);
+}
+
+// ===== Update =====
+async function loadUpdateConfig(){
+    const [appResp,pluginResp]=await Promise.all([
+        authFetch(BASE+'?act=update_config').then(r=>r.json()),
+        authFetch(BASE+'?act=plugin_update_config').then(r=>r.json())
+    ]);
+    if(!appResp.ok)return;
+    const c=appResp.data||{};
+    const p=pluginResp.ok?(pluginResp.data||{}):{};
+    document.getElementById('updateBody').innerHTML=`
+        <div class="card" style="margin-bottom:16px">
+        <div class="card-head"><h3>App 更新发布</h3></div>
+        <div class="card-body">
+        <div style="background:linear-gradient(135deg,#fefce8,#fffbeb);border:1px solid #fde68a;padding:12px 16px;border-radius:10px;margin-bottom:16px;font-size:13px;color:#92400e">App请求时带versionCode，后台版本号大于App才会弹窗更新。</div>
+        <form id="updateForm" onsubmit="submitUpdate(event)">
+        <div class="form-grid">
+            <div class="form-item"><label>versionCode</label><input name="version_code" type="number" min="1" value="${escAttr(String(c.version_code||1))}"></div>
+            <div class="form-item"><label>versionName</label><input name="version_name" value="${escAttr(c.version_name||'1.0.0')}"></div>
+            <div class="form-item"><label>APK文件</label><input name="apk" type="file" accept=".apk"></div>
+            <div class="form-item"><label>下载地址</label><input name="apk_url" value="${escAttr(c.apk_url||'')}" placeholder="上传APK后自动生成"></div>
+            <div class="form-item"><label>弹窗标题</label><input name="title" value="${escAttr(c.title||'发现新版本')}"></div>
+            <div class="form-check"><input name="force" type="checkbox" ${c.force?'checked':''}><label>强制更新</label></div>
+            <div class="form-item" style="grid-column:1/-1"><label>更新说明</label><textarea name="message" placeholder="给用户看的更新内容">${esc(c.message||'')}</textarea></div>
+        </div>
+        <div style="margin-top:16px;display:flex;gap:10px;align-items:center">
+            <button class="btn btn-primary" type="submit">保存并发布</button>
+            ${c.apk_url?`<a href="${escAttr(c.apk_url)}" target="_blank" class="btn btn-default">测试下载</a>`:''}
+            <span id="updateResult" style="font-size:13px;color:var(--muted)">${c.updated_at?'上次: '+esc(c.updated_at):''}</span>
+        </div></form>
+        </div></div>
+        <div class="card">
+        <div class="card-head"><h3>浏览器插件半自动更新</h3></div>
+        <div class="card-body">
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;padding:12px 16px;border-radius:10px;margin-bottom:16px;font-size:13px;color:#475569">上传新版插件 ZIP/CRX 后，插件会在心跳时检测版本，并在插件面板显示下载更新提示。用户下载后手动替换/重新加载插件。</div>
+        <form id="pluginUpdateForm" onsubmit="submitPluginUpdate(event)">
+        <div class="form-grid">
+            <div class="form-item"><label>插件版本号</label><input name="version_name" value="${escAttr(p.version_name||'1.0.0')}" placeholder="例如 1.0.1"></div>
+            <div class="form-item"><label>版本数值</label><input name="version_code" type="number" min="1" value="${escAttr(String(p.version_code||''))}" placeholder="留空按版本号自动生成"></div>
+            <div class="form-item"><label>插件包</label><input name="package" type="file" accept=".zip,.crx"></div>
+            <div class="form-item"><label>下载地址</label><input name="package_url" value="${escAttr(p.package_url||'')}" placeholder="上传插件包后自动生成，也可手动填写"></div>
+            <div class="form-item"><label>提示标题</label><input name="title" value="${escAttr(p.title||'发现插件新版本')}"></div>
+            <div class="form-check"><input name="enabled" type="checkbox" ${p.enabled!==false?'checked':''}><label>启用更新检测</label></div>
+            <div class="form-check"><input name="force" type="checkbox" ${p.force?'checked':''}><label>标记重要更新</label></div>
+            <div class="form-item" style="grid-column:1/-1"><label>更新说明</label><textarea name="message" placeholder="给插件用户看的更新内容">${esc(p.message||'')}</textarea></div>
+        </div>
+        <div style="margin-top:16px;display:flex;gap:10px;align-items:center">
+            <button class="btn btn-primary" type="submit">保存插件更新</button>
+            ${p.package_url?`<a href="${escAttr(p.package_url)}" target="_blank" class="btn btn-default">测试下载</a>`:''}
+            <span id="pluginUpdateResult" style="font-size:13px;color:var(--muted)">${p.updated_at?'上次: '+esc(p.updated_at):''}</span>
+        </div></form>
+        </div></div>`;
+}
+async function submitUpdate(e){
+    e.preventDefault();
+    const fd=new FormData(document.getElementById('updateForm'));
+    fd.append('act','upload_update');
+    document.getElementById('updateResult').textContent='保存中...';
+    const r=await authFetch(BASE,{method:'POST',body:fd});
+    const d=await r.json();
+    document.getElementById('updateResult').textContent=d.msg||(d.ok?'已保存':'失败');
+    if(d.ok) loadUpdateConfig();
+}
+
+async function submitPluginUpdate(e){
+    e.preventDefault();
+    const fd=new FormData(document.getElementById('pluginUpdateForm'));
+    fd.append('act','upload_plugin_update');
+    if(!fd.has('enabled')) fd.append('enabled','0');
+    document.getElementById('pluginUpdateResult').textContent='保存中...';
+    const r=await authFetch(BASE,{method:'POST',body:fd});
+    const d=await r.json();
+    document.getElementById('pluginUpdateResult').textContent=d.msg||(d.ok?'已保存':'失败');
+    if(d.ok) loadUpdateConfig();
+}
+
+// ===== Data =====
+async function loadDumpList(){
+    const r=await authFetch(BASE+'?act=dumps');
+    const d=await r.json();
+    if(!d.ok)return;
+    const el=document.getElementById('dumpList');
+    const files=d.data||[];
+    if(!files.length){el.innerHTML='<div class="empty">暂无解密数据</div>';return;}
+    el.innerHTML=`<table><thead><tr><th>#</th><th>时间</th><th>ID</th><th>大小</th><th>操作</th></tr></thead><tbody>${files.map((f,i)=>`<tr><td>${i+1}</td><td>${esc(f.time)}</td><td style="font-size:12px;font-family:monospace">${esc(f.id)}</td><td>${(f.size/1024).toFixed(1)}KB</td><td><a href="javascript:void(0)" onclick="viewJson('dump','${encodeURIComponent(f.id)}')" style="color:var(--primary)">查看</a></td></tr>`).join('')}</tbody></table>`;
+}
+async function openLatestDump(){
+    const r=await authFetch(BASE+'?act=dumps');
+    const d=await r.json();
+    const files=d.data||[];
+    if(!files.length) return alert('暂无数据');
+    viewJson('dump',encodeURIComponent(files[0].id));
+}
+
+// ===== Cache Cleanup =====
+function jsonRiskClass(level){
+    if(level==='high')return 'tag-danger';
+    if(level==='sensitive')return 'tag-warning';
+    if(level==='normal')return 'tag-success';
+    return 'tag-info';
+}
+
+function jsonPreviewText(preview){
+    if(preview===null||preview===undefined)return '';
+    try{return JSON.stringify(preview,null,2);}
+    catch(e){return String(preview);}
+}
+
+async function loadJsonMonitor(){
+    const el=document.getElementById('jsonMonitorBody');
+    if(!el)return;
+    el.innerHTML='<div class="empty">Loading...</div>';
+    const r=await authFetch(BASE+'?act=json_monitor');
+    const d=await r.json();
+    if(!d.ok){el.innerHTML='<div class="empty">'+esc(d.msg||'Load failed')+'</div>';return;}
+    const rows=d.data||[];
+    const totalBytes=rows.reduce((sum,x)=>sum+Number(x.bytes||0),0);
+    const sensitive=rows.filter(x=>['sensitive','high'].includes(x.risk_level)).length;
+    if(!rows.length){el.innerHTML='<div class="empty">No JSON files found.</div>';return;}
+    el.innerHTML=`
+        <div class="stat-row" style="margin-bottom:16px">
+            <div class="stat-card"><div class="label">JSON Files</div><div class="value blue">${rows.length}</div></div>
+            <div class="stat-card"><div class="label">Total Size</div><div class="value purple">${cacheSizeText(totalBytes)}</div></div>
+            <div class="stat-card"><div class="label">Sensitive</div><div class="value red">${sensitive}</div></div>
+            <div class="stat-card"><div class="label">Latest Update</div><div class="value" style="font-size:17px">${esc(rows[0]?.mtime_text||'-')}</div></div>
+        </div>
+        <table>
+            <thead><tr><th>#</th><th>File</th><th>Purpose</th><th>Category</th><th>Risk</th><th>Records</th><th>Size</th><th>Updated</th><th>Status</th></tr></thead>
+            <tbody>${rows.map((row,i)=>{
+                const parseTag=row.parse_ok===false?'<span class="tag tag-danger">Parse error</span>':(row.parse_ok===true?'<span class="tag tag-success">OK</span>':'<span class="tag tag-info">Skipped</span>');
+                const keys=(row.top_keys||[]).length?`<div style="font-size:12px;color:var(--muted);margin-top:4px">keys: ${esc((row.top_keys||[]).join(', '))}</div>`:'';
+                const preview=jsonPreviewText(row.preview);
+                return `<tr>
+                    <td>${i+1}</td>
+                    <td><code>${esc(row.name)}</code><div style="font-size:12px;color:var(--muted);margin-top:4px">${esc(row.path||'')}</div></td>
+                    <td><b>${esc(row.label||'-')}</b>${keys}${row.parse_error?`<div style="font-size:12px;color:var(--danger);margin-top:4px">${esc(row.parse_error)}</div>`:''}</td>
+                    <td><span class="tag tag-blue">${esc(row.category||'-')}</span></td>
+                    <td><span class="tag ${jsonRiskClass(row.risk_level)}">${esc(row.risk||'-')}</span></td>
+                    <td>${Number(row.records||0)}</td>
+                    <td>${esc(row.size_text||cacheSizeText(row.bytes||0))}</td>
+                    <td>${esc(row.mtime_text||'-')}${row.updated_at?`<div style="font-size:12px;color:var(--muted);margin-top:4px">updated_at: ${esc(row.updated_at)}</div>`:''}</td>
+                    <td>${parseTag}<button class="btn btn-default btn-sm" style="margin-left:8px" onclick="toggleJsonPreview('jsonPreview${i}')">Preview</button></td>
+                </tr>
+                <tr id="jsonPreview${i}" class="hidden"><td colspan="9"><pre class="resp" style="max-height:320px">${esc(preview||'No preview')}</pre></td></tr>`;
+            }).join('')}</tbody>
+        </table>`;
+}
+
+function toggleJsonPreview(id){
+    document.getElementById(id)?.classList.toggle('hidden');
+}
+function cacheSizeText(bytes){
+    const n=Number(bytes||0);
+    if(n>=1024*1024*1024) return (n/1024/1024/1024).toFixed(2)+' GB';
+    if(n>=1024*1024) return (n/1024/1024).toFixed(2)+' MB';
+    if(n>=1024) return (n/1024).toFixed(1)+' KB';
+    return n+' B';
+}
+
+function shortText(s,len){
+    s=String(s||'');
+    len=Number(len||80);
+    return s.length>len?s.slice(0,len-3)+'...':s;
+}
+
+function sqliteAgeText(seconds){
+    const s=Number(seconds||0);
+    if(s>=3600)return Math.floor(s/3600)+'h '+Math.floor((s%3600)/60)+'m';
+    if(s>=60)return Math.floor(s/60)+'m '+(s%60)+'s';
+    return s+'s';
+}
+
+function renderSQLiteMonitor(data){
+    const el=document.getElementById('sqliteMonitorBody');
+    if(!el)return;
+    if(!data||data.ok===false){
+        el.innerHTML='<div class="empty">'+esc(data?.msg||'SQLite unavailable')+'</div>';
+        return;
+    }
+    const files=data.files||[];
+    const tables=data.tables||{};
+    const metrics=data.metrics||{};
+    const queueRows=data.recent_queue||[];
+    const leaseRows=data.recent_leases||[];
+    const groups=data.lease_groups||[];
+    const fileBytes=files.reduce((s,f)=>s+Number(f.bytes||0),0);
+    const quick=String(metrics.quick_check||'');
+    el.innerHTML=`
+        <div class="stat-row" style="margin-bottom:16px">
+            <div class="stat-card"><div class="label">Queue Rows</div><div class="value blue">${Number(tables.task_queue?.rows||0)}</div></div>
+            <div class="stat-card"><div class="label">Lease Rows</div><div class="value purple">${Number(tables.task_leases?.rows||0)}</div></div>
+            <div class="stat-card"><div class="label">DB Files</div><div class="value">${cacheSizeText(fileBytes)}</div></div>
+            <div class="stat-card"><div class="label">Quick Check</div><div class="value ${quick==='ok'?'green':'red'}">${esc(quick||'-')}</div></div>
+        </div>
+        <div class="card" style="margin-bottom:16px">
+            <div class="card-head"><h3>数据库文件</h3><div class="card-toolbar"><span style="font-size:12px;color:var(--muted)">Generated: ${esc(data.generated_at||'-')}</span></div></div>
+            <div class="card-body" style="padding:0">
+                <table><thead><tr><th>File</th><th>Exists</th><th>Size</th><th>Updated</th><th>Path</th></tr></thead>
+                <tbody>${files.map(f=>`<tr>
+                    <td><code>${esc(f.name)}</code></td>
+                    <td><span class="tag ${f.exists?'tag-success':'tag-warning'}">${f.exists?'yes':'no'}</span></td>
+                    <td>${esc(f.size_text||cacheSizeText(f.bytes||0))}</td>
+                    <td>${esc(f.updated_at||'-')}</td>
+                    <td style="font-size:12px;color:var(--muted)">${esc(f.path||'')}</td>
+                </tr>`).join('')}</tbody></table>
+            </div>
+        </div>
+        <div class="card" style="margin-bottom:16px">
+            <div class="card-head"><h3>运行指标</h3></div>
+            <div class="card-body" style="padding:0">
+                <table><thead><tr><th>Metric</th><th>Value</th></tr></thead>
+                <tbody>${Object.keys(metrics).map(k=>`<tr><td><code>${esc(k)}</code></td><td>${esc(metrics[k])}</td></tr>`).join('')}</tbody></table>
+            </div>
+        </div>
+        <div class="card" style="margin-bottom:16px">
+            <div class="card-head"><h3>最近 Lease</h3></div>
+            <div class="card-body" style="padding:0">${leaseRows.length?`
+                <table><thead><tr><th>ID</th><th>Account</th><th>Task</th><th>Task Account</th><th>Token Hash</th><th>Age</th><th>Created</th></tr></thead>
+                <tbody>${leaseRows.map(r=>`<tr>
+                    <td>${Number(r.id||0)}</td>
+                    <td><code>${esc(r.account_id||'')}</code><div style="font-size:12px;color:var(--muted)">${esc(shortText(r.runtime_scope,70))}</div></td>
+                    <td><code>${esc(r.task_id||'')}</code><div style="font-size:12px;color:var(--muted)">${esc(shortText(r.task_url,90))}</div></td>
+                    <td>${esc(r.task_account_username||'')}<div style="font-size:12px;color:var(--muted)">${esc(r.task_account_key||'')}</div></td>
+                    <td><code>${esc(r.api1_token_hash||'')}</code><div style="font-size:12px;color:var(--muted)">${esc(r.api1_token_expires_at_text||'')}</div></td>
+                    <td>${sqliteAgeText(r.age_seconds)}</td>
+                    <td>${esc(r.created_at||'')}</td>
+                </tr>`).join('')}</tbody></table>`:'<div class="empty">暂无 lease</div>'}</div>
+        </div>
+        <div class="card" style="margin-bottom:16px">
+            <div class="card-head"><h3>最近 Queue</h3></div>
+            <div class="card-body" style="padding:0">${queueRows.length?`
+                <table><thead><tr><th>ID</th><th>Account</th><th>Task Key</th><th>Age</th><th>Queued</th></tr></thead>
+                <tbody>${queueRows.map(r=>`<tr>
+                    <td>${Number(r.id||0)}</td>
+                    <td><code>${esc(r.account_id||'')}</code><div style="font-size:12px;color:var(--muted)">${esc(shortText(r.runtime_scope,70))}</div></td>
+                    <td><code>${esc(shortText(r.task_key,120))}</code></td>
+                    <td>${sqliteAgeText(r.age_seconds)}</td>
+                    <td>${esc(r.queued_at||'')}</td>
+                </tr>`).join('')}</tbody></table>`:'<div class="empty">暂无队列任务</div>'}</div>
+        </div>
+        <div class="card">
+            <div class="card-head"><h3>Lease 分组</h3></div>
+            <div class="card-body" style="padding:0">${groups.length?`
+                <table><thead><tr><th>Account</th><th>Runtime Scope</th><th>Leases</th><th>Latest</th></tr></thead>
+                <tbody>${groups.map(r=>`<tr>
+                    <td><code>${esc(r.account_id||'')}</code></td>
+                    <td style="font-size:12px;color:var(--muted)">${esc(shortText(r.runtime_scope,120))}</td>
+                    <td>${Number(r.lease_count||0)}</td>
+                    <td>${esc(r.latest_at||'')}</td>
+                </tr>`).join('')}</tbody></table>`:'<div class="empty">暂无分组</div>'}</div>
+        </div>`;
+}
+
+async function loadSQLiteMonitor(){
+    const el=document.getElementById('sqliteMonitorBody');
+    if(!el)return;
+    el.innerHTML='<div class="empty">Loading...</div>';
+    const r=await authFetch(BASE+'?act=sqlite_monitor');
+    const d=await r.json();
+    if(!d.ok){el.innerHTML='<div class="empty">'+esc(d.msg||'Load failed')+'</div>';return;}
+    renderSQLiteMonitor(d.data||{});
+}
+
+function toggleSQLiteAuto(){
+    const btn=document.getElementById('sqliteAutoBtn');
+    if(sqliteTimer){
+        clearInterval(sqliteTimer); sqliteTimer=null;
+        if(btn){btn.textContent='自动刷新';btn.className='btn btn-success btn-sm';}
+    }else{
+        loadSQLiteMonitor();
+        sqliteTimer=setInterval(loadSQLiteMonitor,5000);
+        if(btn){btn.textContent='停止刷新';btn.className='btn btn-default btn-sm';}
+    }
+}
+
+function renderCacheOverview(items){
+    const el=document.getElementById('cacheBody');
+    const rows=items||[];
+    if(!rows.length){el.innerHTML='<div class="empty">暂无缓存数据</div>';return;}
+    const totalFiles=rows.reduce((s,r)=>s+Number(r.files||0),0);
+    const totalBytes=rows.reduce((s,r)=>s+Number(r.bytes||0),0);
+    el.innerHTML=`
+        <div class="stat-row" style="margin-bottom:16px">
+            <div class="stat-card"><div class="label">缓存项目</div><div class="value blue">${rows.length}</div></div>
+            <div class="stat-card"><div class="label">缓存文件</div><div class="value">${totalFiles}</div></div>
+            <div class="stat-card"><div class="label">缓存体积</div><div class="value purple">${cacheSizeText(totalBytes)}</div></div>
+        </div>
+        <table>
+            <thead><tr><th>#</th><th>项目</th><th>文件数</th><th>体积</th><th>路径</th></tr></thead>
+            <tbody>${rows.map((row,i)=>`<tr>
+                <td>${i+1}</td>
+                <td><b>${esc(row.label||'-')}</b></td>
+                <td>${Number(row.files||0)}</td>
+                <td>${cacheSizeText(row.bytes||0)}</td>
+                <td style="font-size:12px;color:var(--muted)">${esc(row.path||'-')}</td>
+            </tr>`).join('')}</tbody>
+        </table>`;
+}
+
+async function loadCacheOverview(){
+    const r=await authFetch(BASE+'?act=cache_overview');
+    const d=await r.json();
+    if(!d.ok) return;
+    document.getElementById('cacheResult').textContent='上传详情缓存已启用，新上传可在日志中查看响应。';
+    renderCacheOverview(d.data||[]);
+}
+
+async function cleanupCache(mode){
+    const text=mode==='deep'
+        ? '深度清理会额外清空转发日志和旧调试缓存，确定继续吗？'
+        : '确定清理已废弃缓存吗？';
+    if(!confirm(text)) return;
+    const resultEl=document.getElementById('cacheResult');
+    resultEl.textContent='清理中...';
+    const r=await authFetch(BASE+'?act=cleanup_cache&mode='+encodeURIComponent(mode));
+    const d=await r.json();
+    if(!d.ok){
+        resultEl.textContent=d.msg||'清理失败';
+        return;
+    }
+    const parts=(d.steps||[]).map(step=>{
+        const item=step.result||{};
+        return `${step.label}: ${Number(item.deleted_files||0)} 项 / ${cacheSizeText(item.freed_bytes||0)}`;
+    });
+    resultEl.textContent=`${d.msg||'清理完成'}，共清理 ${Number(d.deleted_files||0)} 项，释放 ${cacheSizeText(d.freed_bytes||0)}。${parts.length?' '+parts.join('；'):''}`;
+    renderCacheOverview(d.overview||[]);
+}
+</script>
+</body>
+</html>
