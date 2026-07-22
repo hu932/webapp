@@ -13,7 +13,7 @@ import android.text.InputType;
 import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
-import android.webkit.WebViewTransport;
+import android.webkit.WebView.WebViewTransport;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
