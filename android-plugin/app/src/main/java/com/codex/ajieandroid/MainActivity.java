@@ -42,8 +42,15 @@ public class MainActivity extends Activity {
         status.setPadding(0, 0, 0, 12);
         root.addView(status);
 
+        TextView deviceInfo = new TextView(this);
+        deviceInfo.setText("\u8bbe\u5907\u6807\u8bc6\uff1a" + DeviceInfo.fingerprintKey(this) + "\nAndroid ID\uff1a" + DeviceInfo.androidId(this));
+        deviceInfo.setTextIsSelectable(true);
+        deviceInfo.setPadding(0, 0, 0, 12);
+        root.addView(deviceInfo);
+
         serverUrl = makeEdit("\u670d\u52a1\u5668\u63a5\u53e3\u5730\u5740", SessionStore.get(this, "server_url", SessionStore.DEFAULT_SERVER));
-        username = makeEdit("\u4efb\u52a1\u8d26\u6237", SessionStore.username(this));
+        String savedUsername = SessionStore.username(this);
+        username = makeEdit("\u4efb\u52a1\u8d26\u6237\uff08\u624b\u52a8\u586b\u5199\uff0c\u4e0d\u518d\u5360\u7528\u8bbe\u5907\u6807\u8bc6\uff09", savedUsername);
         password = makeEdit("\u4efb\u52a1\u5bc6\u7801\uff08\u4ec5\u4fdd\u5b58\u5728\u672c\u673a\uff09", SessionStore.get(this, "password", ""));
         password.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         webLoginUrl = makeEdit("WebView \u767b\u5f55\u9875", SessionStore.get(this, "web_login_url", SessionStore.DEFAULT_WEB_LOGIN));
@@ -99,10 +106,13 @@ public class MainActivity extends Activity {
     private void loginTaskAccount() {
         save();
         try {
+            String u = username.getText().toString().trim();
+            String p = password.getText().toString();
+            if (u.isEmpty() || p.isEmpty()) { append("\u8bf7\u5148\u586b\u5199\u4efb\u52a1\u8d26\u6237\u548c\u4efb\u52a1\u5bc6\u7801"); return; }
             JSONObject body = new JSONObject();
             body.put("act", "api1_login");
-            body.put("username", username.getText().toString().trim());
-            body.put("password", password.getText().toString());
+            body.put("username", u);
+            body.put("password", p);
             new ApiClient(this).postAsync(body, (json, err) -> runOnUiThread(() -> {
                 if (err != null) { append("\u4efb\u52a1\u8d26\u6237\u767b\u5f55\u5931\u8d25\uff1a" + err.getMessage()); return; }
                 String token = json.optJSONObject("data") == null ? json.optString("token", "") : json.optJSONObject("data").optString("token", "");
