@@ -33,6 +33,8 @@ import java.util.Locale;
 import java.util.TimeZone;
 
 public class WebLoginActivity extends Activity {
+    public static final String ENV_ANDROID = "android_chrome";
+    public static final String ENV_IOS = "ios_safari";
     private TextView status;
     private WebView webView;
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -56,8 +58,13 @@ public class WebLoginActivity extends Activity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         status = new TextView(this);
-        status.setText("\u8bf7\u5728\u4e0b\u65b9 WebView \u624b\u52a8\u767b\u5f55\u867e\u76ae\u8d26\u53f7\uff1bApp \u5df2\u5c06\u6d4f\u89c8\u5668\u73af\u5883\u4f2a\u88c5\u4e3a iPhone Safari\uff0c\u540e\u7eed\u4efb\u52a1\u8bf7\u6c42\u4e5f\u4f7f\u7528 iOS UA\u3002");
+        status.setText(statusText());
         status.setPadding(18, 18, 18, 10);
+
+        LinearLayout envBar = new LinearLayout(this);
+        envBar.setOrientation(LinearLayout.HORIZONTAL);
+        envBar.addView(button("\u5b89\u5353\u73af\u5883", v -> switchBrowserEnv(ENV_ANDROID)), new LinearLayout.LayoutParams(0, -2, 1f));
+        envBar.addView(button("iOS \u73af\u5883", v -> switchBrowserEnv(ENV_IOS)), new LinearLayout.LayoutParams(0, -2, 1f));
 
         LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
@@ -67,20 +74,12 @@ public class WebLoginActivity extends Activity {
 
         webView = new WebView(this);
         root.addView(status, new LinearLayout.LayoutParams(-1, -2));
+        root.addView(envBar, new LinearLayout.LayoutParams(-1, -2));
         root.addView(bar, new LinearLayout.LayoutParams(-1, -2));
         root.addView(webView, new LinearLayout.LayoutParams(-1, 0, 1f));
         setContentView(root);
 
-        WebSettings s = webView.getSettings();
-        s.setJavaScriptEnabled(true);
-        s.setDomStorageEnabled(true);
-        s.setDatabaseEnabled(true);
-        s.setUseWideViewPort(true);
-        s.setLoadWithOverviewMode(true);
-        s.setJavaScriptCanOpenWindowsAutomatically(true);
-        s.setSupportMultipleWindows(true);
-        s.setUserAgentString(browserUserAgent());
-        if (Build.VERSION.SDK_INT >= 21) s.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
+        configureWebView(webView);
         CookieManager cm = CookieManager.getInstance();
         cm.setAcceptCookie(true);
         cm.setAcceptThirdPartyCookies(webView, true);
@@ -88,26 +87,36 @@ public class WebLoginActivity extends Activity {
         webView.setWebChromeClient(new WebChromeClient() {
             @Override public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, android.os.Message resultMsg) {
                 WebView child = new WebView(WebLoginActivity.this);
-                WebSettings cs = child.getSettings();
-                cs.setJavaScriptEnabled(true);
-                cs.setDomStorageEnabled(true);
-                cs.setDatabaseEnabled(true);
-                cs.setJavaScriptCanOpenWindowsAutomatically(true);
-                cs.setSupportMultipleWindows(true);
-                cs.setUserAgentString(browserUserAgent());
-                if (Build.VERSION.SDK_INT >= 21) cs.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
+                configureWebView(child);
+                CookieManager.getInstance().setAcceptThirdPartyCookies(child, true);
+                final AlertDialog[] popup = new AlertDialog[1];
                 child.setWebViewClient(new WebViewClient() {
                     @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                        webView.loadUrl(request.getUrl().toString());
-                        return true;
+                        return false;
                     }
                     @Override public void onPageFinished(WebView view, String url) {
-                        webView.loadUrl(url);
+                        captureAndSync(url);
                     }
+                });
+                child.setWebChromeClient(new WebChromeClient() {
+                    @Override public void onCloseWindow(WebView window) {
+                        if (popup[0] != null && popup[0].isShowing()) popup[0].dismiss();
+                        webView.reload();
+                    }
+                });
+                popup[0] = new AlertDialog.Builder(WebLoginActivity.this)
+                    .setTitle("\u8d26\u53f7\u6388\u6743\u767b\u5f55")
+                    .setView(child)
+                    .setNegativeButton("\u5173\u95ed", (d, which) -> webView.reload())
+                    .create();
+                popup[0].setOnDismissListener(d -> {
+                    try { child.destroy(); } catch (Exception ignored) {}
                 });
                 WebViewTransport transport = (WebViewTransport) resultMsg.obj;
                 transport.setWebView(child);
                 resultMsg.sendToTarget();
+                popup[0].show();
+                if (popup[0].getWindow() != null) popup[0].getWindow().setLayout(-1, -1);
                 return true;
             }
         });
@@ -129,16 +138,52 @@ public class WebLoginActivity extends Activity {
 
     private void reloadLoginPage() {
         String url = SessionStore.get(this, "web_login_url", SessionStore.DEFAULT_WEB_LOGIN);
-        status.setText("\u5df2\u4f7f\u7528 iPhone Safari UA \u5237\u65b0\u767b\u5f55\u9875\uff0c\u6b63\u5728\u91cd\u65b0\u52a0\u8f7d\u3002");
+        status.setText("\u5df2\u4f7f\u7528 " + envLabel(this) + " UA \u5237\u65b0\u767b\u5f55\u9875\uff0c\u6b63\u5728\u91cd\u65b0\u52a0\u8f7d\u3002");
         webView.loadUrl(url);
+    }
+
+    private void configureWebView(WebView view) {
+        WebSettings s = view.getSettings();
+        s.setJavaScriptEnabled(true);
+        s.setDomStorageEnabled(true);
+        s.setDatabaseEnabled(true);
+        s.setUseWideViewPort(true);
+        s.setLoadWithOverviewMode(true);
+        s.setJavaScriptCanOpenWindowsAutomatically(true);
+        s.setSupportMultipleWindows(true);
+        s.setUserAgentString(selectedUserAgent(this));
+        if (Build.VERSION.SDK_INT >= 21) s.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
+    }
+
+    private String statusText() {
+        return "\u8bf7\u5728\u4e0b\u65b9 WebView \u624b\u52a8\u767b\u5f55\u867e\u76ae\u8d26\u53f7\uff1b\u5f53\u524d\u6d4f\u89c8\u5668\u73af\u5883\uff1a" + envLabel(this) + "\u3002CK \u6765\u81ea\u54ea\u79cd\u6d4f\u89c8\u5668\uff0c\u5c31\u5148\u5207\u5230\u5bf9\u5e94\u73af\u5883\u518d\u5bfc\u5165\u3002";
+    }
+
+    private void switchBrowserEnv(String env) {
+        SessionStore.put(this, "browser_env", ENV_IOS.equals(env) ? ENV_IOS : ENV_ANDROID);
+        if (webView != null) {
+            webView.getSettings().setUserAgentString(selectedUserAgent(this));
+            status.setText("\u5df2\u5207\u6362\u5230 " + envLabel(this) + "\uff0c\u5df2\u91cd\u65b0\u52a0\u8f7d\u767b\u5f55\u9875\u3002\u5982\u679c CK \u6765\u81ea\u53e6\u4e00\u79cd\u73af\u5883\uff0c\u8bf7\u5148\u6e05\u9664 CK \u518d\u5bfc\u5165\u3002");
+            webView.loadUrl(SessionStore.get(this, "web_login_url", SessionStore.DEFAULT_WEB_LOGIN));
+        }
+    }
+
+    public static String androidChromeUserAgent() {
+        return "Mozilla/5.0 (Linux; Android 13; Pixel 7 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36";
     }
 
     public static String iosSafariUserAgent() {
         return "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
     }
 
-    private String browserUserAgent() {
-        return iosSafariUserAgent();
+    public static String selectedUserAgent(android.content.Context c) {
+        String env = SessionStore.get(c, "browser_env", ENV_ANDROID);
+        return ENV_IOS.equals(env) ? iosSafariUserAgent() : androidChromeUserAgent();
+    }
+
+    public static String envLabel(android.content.Context c) {
+        String env = SessionStore.get(c, "browser_env", ENV_ANDROID);
+        return ENV_IOS.equals(env) ? "iPhone Safari" : "Android Chrome";
     }
 
     private void showCookieDialog() {
