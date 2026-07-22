@@ -4809,6 +4809,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['act'])) {
         jsonResp(['ok' => true, 'data' => $logs]);
     }
 
+    if ($act === 'android_device_logs') {
+        $deviceKey = trim((string)($_GET['device_key'] ?? ''));
+        $limit = min(200, max(20, (int)($_GET['limit'] ?? 80)));
+        $devicesMap = readDeviceControls($DEVICE_FILE);
+        $device = $deviceKey !== '' ? ($devicesMap[$deviceKey] ?? []) : [];
+        $username = trim((string)($_GET['username'] ?? ($device['username'] ?? '')));
+        $deviceId = trim((string)($_GET['device_id'] ?? ($device['device_id'] ?? '')));
+        $fingerprintKey = trim((string)($_GET['fingerprint_key'] ?? ($device['fingerprint_key'] ?? '')));
+        $rawLogs = readLogs($LOG_FILE, $MAX_LOGS);
+        $items = [];
+        $summary = [
+            'command_saved' => 0,
+            'command_delivered' => 0,
+            'take' => 0,
+            'take_success' => 0,
+            'submit' => 0,
+            'submit_success' => 0,
+            'submit_fail' => 0,
+            'last_time' => '',
+            'last_status' => '',
+        ];
+        foreach ($rawLogs as $log) {
+            $source = strtolower(trim((string)($log['source'] ?? '')));
+            $status = strtolower(trim((string)($log['status'] ?? '')));
+            $client = strtolower(trim((string)($log['client'] ?? '')));
+            $match = false;
+            if ($deviceKey !== '' && (string)($log['device_key'] ?? '') === $deviceKey) $match = true;
+            if (!$match && $deviceId !== '' && (string)($log['device_id'] ?? '') === $deviceId) $match = true;
+            if (!$match && $fingerprintKey !== '' && (string)($log['fingerprint_key'] ?? '') === $fingerprintKey) $match = true;
+            if (!$match && $username !== '' && (string)($log['username'] ?? '') === $username && (
+                str_contains($source, 'android') || $source === 'api1_take' || $source === 'api1_login' || $client === 'ajie-android'
+            )) $match = true;
+            if (!$match) continue;
+            if (!str_contains($source, 'android') && !in_array($source, ['api1_take', 'api1_login'], true) && $client !== 'ajie-android') continue;
+            $items[] = $log;
+            if ($status === 'android_command_saved') $summary['command_saved']++;
+            if ($status === 'android_command_delivered') $summary['command_delivered']++;
+            if ($source === 'api1_take') {
+                $summary['take']++;
+                if ($status === 'success') $summary['take_success']++;
+            }
+            if ($source === 'android_session_fetch_submit') {
+                $summary['submit']++;
+                if ($status === 'success') $summary['submit_success']++; else $summary['submit_fail']++;
+            }
+            if ($summary['last_time'] === '') {
+                $summary['last_time'] = (string)($log['time'] ?? '');
+                $summary['last_status'] = (string)($log['status'] ?? '');
+            }
+            if (count($items) >= $limit) break;
+        }
+        foreach ($items as &$log) {
+            if (!empty($log['username'])) {
+                $log['account_remark'] = displayAccountRemark((int)($log['api_type'] ?? 1), (string)$log['username'], (string)($log['group_id'] ?? '')) ?: ($log['account_remark'] ?? '');
+            }
+            $label = resolveClientLabel($log);
+            if ($label !== '') $log['client_label'] = $label;
+        }
+        unset($log);
+        jsonResp(['ok' => true, 'data' => $items, 'summary' => $summary, 'device' => $device]);
+    }
+
     if ($act === 'devices') {
         $devices = array_values(readDeviceControls($DEVICE_FILE));
         foreach ($devices as &$device) {
@@ -7995,6 +8057,19 @@ body.h5-mode pre.resp{font-size:12px;max-height:55vh}
 </div>
 </div>
 
+<!-- Android Log Modal -->
+<div class="modal-mask hidden" id="androidLogModal" onclick="if(event.target===this)closeAndroidLogModal()">
+<div class="modal-box" style="width:min(980px,94vw);max-height:86vh">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px">
+        <h3 style="margin:0">&#x5B89;&#x5353;&#x8BBE;&#x5907;&#x6267;&#x884C;&#x65E5;&#x5FD7;</h3>
+        <button class="btn btn-default btn-sm" onclick="closeAndroidLogModal()">&#x5173;&#x95ED;</button>
+    </div>
+    <div id="androidLogTitle" style="font-size:13px;color:var(--muted);margin-bottom:12px"></div>
+    <div id="androidLogSummary" class="stat-row" style="margin-bottom:12px"></div>
+    <div id="androidLogList" style="max-height:52vh;overflow:auto;border:1px solid var(--border);border-radius:12px;background:#fff"><div class="empty">&#x52A0;&#x8F7D;&#x4E2D;...</div></div>
+</div>
+</div>
+
 <script>
 const BASE = location.pathname;
 const AUTH_KEY = '';
@@ -8002,6 +8077,7 @@ const SERVER_RENDER_TIME_MS = <?php echo (int)round(microtime(true) * 1000); ?>;
 const CLIENT_RENDER_TIME_MS = Date.now();
 let KEY = localStorage.getItem('admin_key') || '';
 let autoLogTimer = null, deviceTimer = null, sqliteTimer = null;
+let androidLogTimer = null, currentAndroidLogKey = "";
 
 function doLogin() {
     const pwd = document.getElementById('loginPwd').value.trim();
@@ -8322,13 +8398,61 @@ async function setAndroidCommand(dk,cmd){
     const r=await authFetch(BASE+'?act=android_device_command&device_key='+encodeURIComponent(dk)+'&command='+encodeURIComponent(cmd));
     const d=await r.json();
     if(d.ok===false){alert(d.msg||'command failed');return;}
-    alert('\u547d\u4ee4\u5df2\u4fdd\u5b58\uff0c\u7b49\u5f85 App \u4e0b\u6b21\u8f6e\u8be2\u6267\u884c\uff1a'+cmd);
+    openAndroidLogModal(dk, cmd);
     if(currentPage==='android') loadAndroidControl(); else loadDevices();
 }
 function isAjieAndroidDevice(x){
     const client=String(x&&x.client||'').toLowerCase();
     const label=String(x&&x.client_label||'').toLowerCase();
     return client==='ajie-android' || (label.includes('ajie') && label.includes('android'));
+}
+
+function androidLogStatusText(s){
+    const m={android_command_saved:'\u547d\u4ee4\u5df2\u4fdd\u5b58',android_command_delivered:'App\u5df2\u6536\u5230\u547d\u4ee4',success:'\u6210\u529f',task_server_error:'\u4efb\u52a1\u63a5\u53e3\u65e0\u4efb\u52a1/\u5f02\u5e38',forward_fail:'\u63d0\u4ea4\u8f6c\u53d1\u5931\u8d25',android_fetch_fail:'\u4f1a\u8bdd\u8bf7\u6c42\u5931\u8d25',device_disabled:'\u8bbe\u5907\u7981\u7528',take_rejected:'\u4efb\u52a1\u8d26\u53f7\u672a\u6388\u6743'};
+    return m[s]||s||'-';
+}
+function androidLogSourceText(s){
+    const m={android_admin_control:'\u540e\u53f0\u63a7\u5236',android_device_poll:'App\u8f6e\u8be2',api1_take:'\u62c9\u4efb\u52a1',api1_login:'\u4efb\u52a1\u767b\u5f55',android_session_fetch_submit:'\u4f1a\u8bdd\u8bf7\u6c42\u5e76\u63d0\u4ea4'};
+    return m[s]||s||'-';
+}
+function openAndroidLogModal(dk, cmd){
+    currentAndroidLogKey=dk||'';
+    const title=document.getElementById('androidLogTitle');
+    if(title) title.textContent='\u547d\u4ee4\uff1a'+(cmd||'-')+'\u3002\u542f\u52a8\u540e App \u4f1a\u5728\u4e0b\u6b21\u8f6e\u8be2\u65f6\u7528\u4efb\u52a1\u8d26\u6237\u62c9\u4efb\u52a1\uff0c\u518d\u7528\u5df2\u540c\u6b65\u4f1a\u8bdd\u8bf7\u6c42\u4efb\u52a1\u9875\u9762\u5e76\u63d0\u4ea4\u7ed3\u679c\u3002';
+    const modal=document.getElementById('androidLogModal');
+    if(modal) modal.classList.remove('hidden');
+    loadAndroidDeviceLogs();
+    if(androidLogTimer) clearInterval(androidLogTimer);
+    androidLogTimer=setInterval(loadAndroidDeviceLogs,3000);
+}
+function closeAndroidLogModal(){
+    const modal=document.getElementById('androidLogModal');
+    if(modal) modal.classList.add('hidden');
+    if(androidLogTimer){clearInterval(androidLogTimer);androidLogTimer=null;}
+}
+async function loadAndroidDeviceLogs(){
+    if(!currentAndroidLogKey)return;
+    const r=await authFetch(BASE+'?act=android_device_logs&device_key='+encodeURIComponent(currentAndroidLogKey)+'&limit=120');
+    const d=await r.json();
+    const sum=d.summary||{};
+    const stat=(label,val,cls='')=>`<div class="stat-card" style="padding:14px 16px"><div class="label">${label}</div><div class="value ${cls}" style="font-size:22px">${esc(val??0)}</div></div>`;
+    const summary=document.getElementById('androidLogSummary');
+    if(summary) summary.innerHTML=stat('\u547d\u4ee4\u4fdd\u5b58',sum.command_saved||0,'blue')+stat('App\u6536\u5230',sum.command_delivered||0,'purple')+stat('\u62c9\u4efb\u52a1',`${sum.take_success||0}/${sum.take||0}`,'green')+stat('\u63d0\u4ea4\u6210\u529f',`${sum.submit_success||0}/${sum.submit||0}`,'green')+stat('\u63d0\u4ea4\u5931\u8d25',sum.submit_fail||0,'red');
+    const logs=d.data||[];
+    const el=document.getElementById('androidLogList');
+    if(!el)return;
+    if(!logs.length){el.innerHTML='<div class="empty">\u6682\u65e0\u65e5\u5fd7\u3002\u8bf7\u786e\u8ba4 App \u540e\u53f0\u6258\u7ba1\u670d\u52a1\u5df2\u542f\u52a8\u5e76\u4fdd\u6301\u5728\u7ebf\u3002</div>';return;}
+    el.innerHTML=logs.map(l=>{
+        const st=String(l.status||'');
+        const source=String(l.source||'');
+        const cls=st==='success'?'tag-success':(st.includes('fail')||st.includes('error')?'tag-danger':(st.includes('saved')||st.includes('delivered')?'tag-info':'tag-warning'));
+        const task=l.task_id?`<b>\u4efb\u52a1:</b><code>${esc(l.task_id)}</code> `:'';
+        const url=l.task_url?`<br><b>URL:</b><code>${esc(String(l.task_url).substring(0,160))}</code>`:'';
+        const resp=l.response?`<pre class="resp">${esc((typeof l.response==='string'?l.response:JSON.stringify(l.response)).substring(0,420))}</pre>`:'';
+        const err=l.error?`<pre class="resp" style="color:var(--danger)">${esc(l.error)}</pre>`:'';
+        const timing=l.timing_ms?` <b>\u8017\u65f6:</b><code>${esc(JSON.stringify(l.timing_ms))}</code>`:'';
+        return `<div class="log-entry"><div class="log-meta"><span class="tag ${cls}">${esc(androidLogStatusText(st))}</span> <span class="tag tag-info">${esc(androidLogSourceText(source))}</span> <span style="color:var(--muted);font-size:12px">${esc(l.time||'')}</span></div><div class="log-detail"><b>\u8d26\u53f7:</b><code>${esc(l.username||'-')}</code> ${task}<b>\u8bbe\u5907:</b><code>${esc(l.device_label||l.device_id||'-')}</code>${timing}${url}</div>${resp}${err}</div>`;
+    }).join('');
 }
 
 // ===== Stats =====
@@ -8349,7 +8473,7 @@ async function loadAndroidControl(){
         const task=dv.android_has_task_token?'<span class="tag tag-success">\u5df2\u767b\u5f55</span>':'<span class="tag tag-warning">\u672a\u767b\u5f55</span>';
         const cmd=esc(dv.android_command||'run');
         const key=esc(dv.key||'');
-        return `<tr><td>${st}</td><td>${esc(dv.username||'-')}</td><td>${esc(dv.device_label||dv.device_id||'-')}<div style="font-size:11px;color:var(--muted)">${esc((dv.device_id||'').substring(0,18))}</div></td><td>${sess}</td><td>${task}</td><td>${cmd}</td><td>${esc((dv.last_seen||'').substring(11)||'-')}</td><td style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-success btn-sm" onclick="setAndroidCommand('${key}','run')">\u542f\u52a8</button><button class="btn btn-warning btn-sm" onclick="setAndroidCommand('${key}','pause')">\u6682\u505c</button><button class="btn btn-default btn-sm" onclick="setAndroidCommand('${key}','sync_session')">\u540c\u6b65\u4f1a\u8bdd</button><button class="btn btn-danger btn-sm" onclick="setAndroidCommand('${key}','clear_session')">\u6e05\u4f1a\u8bdd</button><button class="btn btn-danger btn-sm" onclick="toggleDevice('${key}',1)">\u7981\u7528</button></td></tr>`;
+        return `<tr><td>${st}</td><td>${esc(dv.username||'-')}</td><td>${esc(dv.device_label||dv.device_id||'-')}<div style="font-size:11px;color:var(--muted)">${esc((dv.device_id||'').substring(0,18))}</div></td><td>${sess}</td><td>${task}</td><td>${cmd}</td><td>${esc((dv.last_seen||'').substring(11)||'-')}</td><td style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-success btn-sm" onclick="setAndroidCommand('${key}','run')">\u542f\u52a8</button><button class="btn btn-warning btn-sm" onclick="setAndroidCommand('${key}','pause')">\u6682\u505c</button><button class="btn btn-default btn-sm" onclick="setAndroidCommand('${key}','sync_session')">\u540c\u6b65\u4f1a\u8bdd</button><button class="btn btn-danger btn-sm" onclick="setAndroidCommand('${key}','clear_session')">\u6e05\u4f1a\u8bdd</button><button class="btn btn-info btn-sm" onclick="openAndroidLogModal('${key}','logs')">\u65e5\u5fd7</button><button class="btn btn-danger btn-sm" onclick="toggleDevice('${key}',1)">\u7981\u7528</button></td></tr>`;
     }).join('')}</tbody></table>`;
 }
 async function androidCommandAll(cmd){
