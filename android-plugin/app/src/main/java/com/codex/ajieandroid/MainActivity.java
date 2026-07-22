@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
+import android.text.InputType;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -15,7 +16,7 @@ import org.json.JSONObject;
 
 public class MainActivity extends Activity {
     private TextView log, status;
-    private EditText serverUrl, username, webLoginUrl;
+    private EditText serverUrl, username, password, webLoginUrl;
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -32,7 +33,7 @@ public class MainActivity extends Activity {
         root.addView(title);
 
         TextView tip = new TextView(this);
-        tip.setText("\u53ea\u9700\u8981\u5728 WebView \u767b\u5f55\u867e\u76ae\u8d26\u53f7\uff0cApp \u4f1a\u81ea\u52a8\u540c\u6b65\u4f1a\u8bdd\u5230\u670d\u52a1\u5668\u3002\u4e4b\u540e\u670d\u52a1\u5668\u63a7\u5236\u672c\u8bbe\u5907\u62c9\u4efb\u52a1\u3001\u63d0\u4ea4\u6570\u636e\u548c\u5faa\u73af\u3002");
+        tip.setText("\u5148\u5728 App \u91cc\u767b\u5f55\u4efb\u52a1\u8d26\u6237\u5e76\u4fdd\u5b58\u672c\u5730 token\uff0c\u518d\u7528 WebView \u767b\u5f55\u867e\u76ae\u4f1a\u8bdd\u3002\u4e4b\u540e\u670d\u52a1\u5668\u53ea\u8d1f\u8d23\u63a7\u5236\u8fd9\u53f0 App \u542f\u52a8\u3001\u6682\u505c\u3001\u540c\u6b65\u548c\u5faa\u73af\u3002");
         tip.setPadding(0, 8, 0, 16);
         root.addView(tip);
 
@@ -42,7 +43,9 @@ public class MainActivity extends Activity {
         root.addView(status);
 
         serverUrl = makeEdit("\u670d\u52a1\u5668\u63a5\u53e3\u5730\u5740", SessionStore.get(this, "server_url", SessionStore.DEFAULT_SERVER));
-        username = makeEdit("\u8bbe\u5907\u7ed1\u5b9a\u8d26\u53f7\uff08\u670d\u52a1\u5668\u540e\u53f0\u8bc6\u522b\u7528\uff09", SessionStore.username(this));
+        username = makeEdit("\u4efb\u52a1\u8d26\u6237", SessionStore.username(this));
+        password = makeEdit("\u4efb\u52a1\u5bc6\u7801\uff08\u4ec5\u4fdd\u5b58\u5728\u672c\u673a\uff09", SessionStore.get(this, "password", ""));
+        password.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         webLoginUrl = makeEdit("WebView \u767b\u5f55\u9875", SessionStore.get(this, "web_login_url", SessionStore.DEFAULT_WEB_LOGIN));
         log = new TextView(this);
         log.setTextIsSelectable(true);
@@ -50,8 +53,10 @@ public class MainActivity extends Activity {
 
         root.addView(serverUrl);
         root.addView(username);
+        root.addView(password);
         root.addView(webLoginUrl);
         root.addView(button("\u4fdd\u5b58\u8bbe\u7f6e", v -> save()));
+        root.addView(button("\u767b\u5f55\u4efb\u52a1\u8d26\u6237", v -> loginTaskAccount()));
         root.addView(button("\u6253\u5f00 WebView \u767b\u5f55\u867e\u76ae", v -> startActivity(new Intent(this, WebLoginActivity.class))));
         root.addView(button("\u542f\u52a8\u6258\u7ba1\u6a21\u5f0f", v -> startWorker(TaskWorkerService.ACTION_START)));
         root.addView(button("\u7acb\u5373\u6267\u884c\u4e00\u6b21", v -> startWorker(TaskWorkerService.ACTION_RUN_ONCE)));
@@ -85,9 +90,28 @@ public class MainActivity extends Activity {
     private void save() {
         SessionStore.put(this, "server_url", serverUrl.getText().toString().trim());
         SessionStore.put(this, "username", username.getText().toString().trim());
+        SessionStore.put(this, "password", password.getText().toString());
         SessionStore.put(this, "web_login_url", webLoginUrl.getText().toString().trim());
         append("\u8bbe\u7f6e\u5df2\u4fdd\u5b58");
         refreshStatus();
+    }
+
+    private void loginTaskAccount() {
+        save();
+        try {
+            JSONObject body = new JSONObject();
+            body.put("act", "api1_login");
+            body.put("username", username.getText().toString().trim());
+            body.put("password", password.getText().toString());
+            new ApiClient(this).postAsync(body, (json, err) -> runOnUiThread(() -> {
+                if (err != null) { append("\u4efb\u52a1\u8d26\u6237\u767b\u5f55\u5931\u8d25\uff1a" + err.getMessage()); return; }
+                String token = json.optJSONObject("data") == null ? json.optString("token", "") : json.optJSONObject("data").optString("token", "");
+                if (token.isEmpty()) token = json.optString("auth_token", "");
+                if (!token.isEmpty()) SessionStore.put(this, "token", token);
+                append(ApiClient.ok(json) ? "\u4efb\u52a1\u8d26\u6237\u767b\u5f55\u6210\u529f" : "\u767b\u5f55\u8fd4\u56de\uff1a" + ApiClient.compact(json));
+                refreshStatus();
+            }));
+        } catch (Exception e) { append("\u4efb\u52a1\u8d26\u6237\u767b\u5f55\u5f02\u5e38\uff1a" + e.getMessage()); }
     }
 
     private void startWorker(String action) {
@@ -102,7 +126,9 @@ public class MainActivity extends Activity {
         String cookie = SessionStore.get(this, "web_cookie", "");
         String syncedAt = SessionStore.get(this, "session_synced_at", "");
         String lastCmd = SessionStore.get(this, "last_command", "-");
-        String s = "\u72b6\u6001\uff1a" + (cookie.isEmpty() ? "\u672a\u767b\u5f55\u867e\u76ae / \u672a\u4fdd\u5b58\u4f1a\u8bdd" : "\u5df2\u4fdd\u5b58\u867e\u76ae\u4f1a\u8bdd")
+        String token = SessionStore.get(this, "token", "");
+        String s = "\u72b6\u6001\uff1a" + (token.isEmpty() ? "\u4efb\u52a1\u8d26\u6237\u672a\u767b\u5f55" : "\u4efb\u52a1\u8d26\u6237\u5df2\u767b\u5f55")
+            + " / " + (cookie.isEmpty() ? "\u672a\u767b\u5f55\u867e\u76ae / \u672a\u4fdd\u5b58\u4f1a\u8bdd" : "\u5df2\u4fdd\u5b58\u867e\u76ae\u4f1a\u8bdd")
             + " / \u6700\u8fd1\u540c\u6b65\uff1a" + (syncedAt.isEmpty() ? "-" : syncedAt)
             + " / \u670d\u52a1\u5668\u547d\u4ee4\uff1a" + lastCmd;
         if (status != null) status.setText(s);

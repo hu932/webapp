@@ -1021,6 +1021,13 @@ function pollAndroidDevice(string $deviceFile, string $sessionFile, array $input
     $key = (string)($hb['device_key'] ?? androidManagedDeviceKeyFromInput($input));
     $devices = readDeviceControls($deviceFile);
     $device = $devices[$key] ?? [];
+    if (isset($devices[$key])) {
+        $devices[$key]['android_has_task_token'] = !empty($input['has_task_token']);
+        $devices[$key]['android_has_cookie'] = !empty($input['has_cookie']);
+        $devices[$key]['updated_at'] = date('Y-m-d H:i:s');
+        saveDeviceControls($deviceFile, $devices);
+        $device = $devices[$key];
+    }
     $sessions = readAndroidSessions($sessionFile);
     $hasSession = !empty($sessions[$key]['cookie']);
     $disabled = !empty($device['disabled']);
@@ -7745,6 +7752,12 @@ body.h5-mode pre.resp{font-size:12px;max-height:55vh}
         <div class="card"><div class="card-head"><h3>在线设备 <span id="onlineCount" style="color:var(--success);font-size:14px"></span></h3><div class="card-toolbar"><span style="font-size:12px;color:var(--muted)">每10秒自动刷新，禁用设备会保留显示便于解除</span></div></div><div class="card-body"><div id="deviceList"><div class="empty">加载中...</div></div></div></div>
     </div>
 
+
+    <!-- Android Control -->
+    <div class="page hidden" id="page-android">
+        <div class="card"><div class="card-head"><h3>&#x5B89;&#x5353; App &#x63A7;&#x5236; <span id="androidCount" style="color:var(--success);font-size:14px"></span></h3><div class="card-toolbar"><button class="btn btn-primary btn-sm" onclick="loadAndroidControl()">&#x5237;&#x65B0;</button><button class="btn btn-success btn-sm" onclick="androidCommandAll('run')">&#x5168;&#x90E8;&#x542F;&#x52A8;</button><button class="btn btn-warning btn-sm" onclick="androidCommandAll('pause')">&#x5168;&#x90E8;&#x6682;&#x505C;</button></div></div><div class="card-body"><div id="androidControlList"><div class="empty">&#x52A0;&#x8F7D;&#x4E2D;...</div></div></div></div>
+    </div>
+
     <!-- Stats -->
     <div class="page hidden" id="page-stats">
         <div class="card"><div class="card-head"><h3>指纹环境管理</h3><div class="card-toolbar"><select id="statsDate" onchange="loadStats()" style="height:34px;border:2px solid #e2e8f0;border-radius:8px;padding:0 12px;font-size:13px;font-family:var(--font);background:#f8fafc"></select><button class="btn btn-danger btn-sm" onclick="clearStats()">清除统计</button></div></div><div class="card-body"><div id="statsBody"><div class="empty">加载中...</div></div></div></div>
@@ -8017,6 +8030,7 @@ function switchPage(name, el) {
     if (name==='dashboard') loadDashboard();
     else if (name==='logs') loadLogs();
     else if (name==='devices') { loadDevices(); if(!deviceTimer) deviceTimer=setInterval(loadDevices,10000); }
+    else if (name==='android') { loadAndroidControl(); if(!deviceTimer) deviceTimer=setInterval(loadAndroidControl,10000); }
     else if (name==='stats') loadStats();
     else if (name==='extconfig') loadApi1Accounts();
     else if (name==='accounts') loadApi1Accounts();
@@ -8241,6 +8255,33 @@ async function setAndroidCommand(dk,cmd){
 }
 
 // ===== Stats =====
+
+async function loadAndroidControl(){
+    const r=await authFetch(BASE+'?act=devices');
+    const d=await r.json();
+    if(!d.ok)return;
+    const rows=(d.data||[]).filter(x=>String(x.platform||x.device_type||x.client||'').toLowerCase().includes('android') || String(x.client||'').includes('ajie-android'));
+    const el=document.getElementById('androidControlList');
+    const cnt=document.getElementById('androidCount');
+    if(cnt)cnt.textContent='('+rows.length+' \u53f0)';
+    if(!rows.length){el.innerHTML='<div class="empty">\u6682\u65e0\u5b89\u5353 App \u8bbe\u5907</div>';return;}
+    el.innerHTML=`<table><thead><tr><th>\u72b6\u6001</th><th>\u4efb\u52a1\u8d26\u6237</th><th>\u8bbe\u5907</th><th>\u4f1a\u8bdd</th><th>\u4efb\u52a1\u767b\u5f55</th><th>\u547d\u4ee4</th><th>\u5fc3\u8df3</th><th style="width:360px">\u63a7\u5236</th></tr></thead><tbody>${rows.map(dv=>{
+        const online=!!dv.online, dis=!!dv.disabled;
+        const st=dis?'<span class="tag tag-danger">\u7981\u7528</span>':(online?'<span class="tag tag-success">\u5728\u7ebf</span>':'<span class="tag tag-warning">\u79bb\u7ebf</span>');
+        const sess=dv.has_android_session||dv.android_has_cookie?'<span class="tag tag-success">\u5df2\u540c\u6b65</span>':'<span class="tag tag-warning">\u672a\u540c\u6b65</span>';
+        const task=dv.android_has_task_token?'<span class="tag tag-success">\u5df2\u767b\u5f55</span>':'<span class="tag tag-warning">\u672a\u767b\u5f55</span>';
+        const cmd=esc(dv.android_command||'run');
+        const key=esc(dv.key||'');
+        return `<tr><td>${st}</td><td>${esc(dv.username||'-')}</td><td>${esc(dv.device_label||dv.device_id||'-')}<div style="font-size:11px;color:var(--muted)">${esc((dv.device_id||'').substring(0,18))}</div></td><td>${sess}</td><td>${task}</td><td>${cmd}</td><td>${esc((dv.last_seen||'').substring(11)||'-')}</td><td style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-success btn-sm" onclick="setAndroidCommand('${key}','run')">\u542f\u52a8</button><button class="btn btn-warning btn-sm" onclick="setAndroidCommand('${key}','pause')">\u6682\u505c</button><button class="btn btn-default btn-sm" onclick="setAndroidCommand('${key}','sync_session')">\u540c\u6b65\u4f1a\u8bdd</button><button class="btn btn-danger btn-sm" onclick="setAndroidCommand('${key}','clear_session')">\u6e05\u4f1a\u8bdd</button><button class="btn btn-danger btn-sm" onclick="toggleDevice('${key}',1)">\u7981\u7528</button></td></tr>`;
+    }).join('')}</tbody></table>`;
+}
+async function androidCommandAll(cmd){
+    const r=await authFetch(BASE+'?act=devices'); const d=await r.json();
+    const rows=(d.data||[]).filter(x=>String(x.platform||x.device_type||x.client||'').toLowerCase().includes('android') || String(x.client||'').includes('ajie-android'));
+    for(const dv of rows){ if(dv.key) await authFetch(BASE+'?act=android_device_command&device_key='+encodeURIComponent(dv.key)+'&command='+encodeURIComponent(cmd)); }
+    loadAndroidControl();
+}
+
 async function loadStats(){
     const sel=document.getElementById('statsDate');
     const date=sel.value||'';

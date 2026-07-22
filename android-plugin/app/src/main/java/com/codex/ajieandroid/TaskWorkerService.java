@@ -80,6 +80,7 @@ public class TaskWorkerService extends Service {
         body.put("act", "android_device_poll");
         body.put("username", SessionStore.username(this));
         body.put("has_cookie", !currentCookie().isEmpty());
+        body.put("has_task_token", !SessionStore.get(this, "token", "").isEmpty());
         return new ApiClient(this).post(body);
     }
 
@@ -100,10 +101,34 @@ public class TaskWorkerService extends Service {
     }
 
     private JSONObject takeTask() throws Exception {
+        ensureTaskLogin();
         JSONObject body = new JSONObject();
-        body.put("act", "android_task_take");
+        body.put("act", "api1_take");
         body.put("username", SessionStore.username(this));
-        return new ApiClient(this).post(body);
+        JSONObject resp = new ApiClient(this).post(body);
+        String code = resp.optString("code", "");
+        String msg = resp.optString("msg", resp.optString("error", ""));
+        if ("401".equals(code) || msg.contains("login") || msg.contains("\u767b\u5f55")) {
+            SessionStore.put(this, "token", "");
+            ensureTaskLogin();
+            resp = new ApiClient(this).post(body);
+        }
+        return resp;
+    }
+
+    private void ensureTaskLogin() throws Exception {
+        if (!SessionStore.get(this, "token", "").isEmpty()) return;
+        String username = SessionStore.username(this);
+        String password = SessionStore.get(this, "password", "");
+        if (username.isEmpty() || password.isEmpty()) return;
+        JSONObject body = new JSONObject();
+        body.put("act", "api1_login");
+        body.put("username", username);
+        body.put("password", password);
+        JSONObject json = new ApiClient(this).post(body);
+        String token = json.optJSONObject("data") == null ? json.optString("token", "") : json.optJSONObject("data").optString("token", "");
+        if (token.isEmpty()) token = json.optString("auth_token", "");
+        if (!token.isEmpty()) SessionStore.put(this, "token", token);
     }
 
     private void submitTask(String taskUrl, String taskId, String cookie) throws Exception {
