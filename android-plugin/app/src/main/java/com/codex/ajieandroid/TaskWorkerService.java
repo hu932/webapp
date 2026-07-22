@@ -95,7 +95,7 @@ public class TaskWorkerService extends Service {
         body.put("cookies", cookie);
         body.put("cookie_url", cookieUrl);
         body.put("cookie_host", hostOf(cookieUrl));
-        body.put("user_agent", "Mozilla/5.0 (Linux; Android 15; Mobile) AppleWebKit/537.36 Chrome/150.0.0.0 Mobile Safari/537.36");
+        body.put("user_agent", WebLoginActivity.iosSafariUserAgent());
         JSONObject resp = new ApiClient(this).post(body);
         if (ApiClient.ok(resp)) SessionStore.put(this, "session_synced_at", String.valueOf(System.currentTimeMillis() / 1000));
     }
@@ -139,7 +139,7 @@ public class TaskWorkerService extends Service {
         body.put("url", taskUrl);
         body.put("cookies", cookie);
         body.put("cookie_url", SessionStore.get(this, "web_cookie_url", ""));
-        body.put("user_agent", "Mozilla/5.0 (Linux; Android 15; Mobile) AppleWebKit/537.36 Chrome/150.0.0.0 Mobile Safari/537.36");
+        body.put("user_agent", WebLoginActivity.iosSafariUserAgent());
         new ApiClient(this).post(body);
     }
 
