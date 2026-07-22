@@ -168,7 +168,14 @@ public class TaskWorkerService extends Service {
     private void clearSession() {
         SessionStore.put(this, "web_cookie", "");
         SessionStore.put(this, "web_cookie_url", "");
+        SessionStore.put(this, "session_synced_at", "");
         try { CookieManager.getInstance().removeAllCookies(null); CookieManager.getInstance().flush(); } catch (Exception ignored) {}
+        try {
+            JSONObject body = new JSONObject();
+            body.put("act", "android_session_clear");
+            body.put("username", SessionStore.username(this));
+            new ApiClient(this).post(body);
+        } catch (Exception ignored) {}
     }
 
     private String hostOf(String url) {

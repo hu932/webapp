@@ -1016,6 +1016,28 @@ function syncAndroidSession(string $sessionFile, string $deviceFile, array $inpu
     return ['ok' => true, 'success' => true, 'msg' => 'session synced', 'device_key' => $key, 'data' => ['has_session' => true, 'cookie_host' => $host]];
 }
 
+
+function clearAndroidSession(string $sessionFile, string $deviceFile, array $input): array {
+    $username = trim((string)($input['username'] ?? '')) ?: 'unknown';
+    $deviceId = trim((string)($input['device_id'] ?? '')) ?: ('unknown-' . substr(md5($_SERVER['REMOTE_ADDR'] ?? ''), 0, 8));
+    $key = deviceKey($username, $deviceId);
+    $sessions = readAndroidSessions($sessionFile);
+    if (isset($sessions[$key])) {
+        unset($sessions[$key]);
+        saveAndroidSessions($sessionFile, $sessions);
+    }
+    $devices = readDeviceControls($deviceFile);
+    if (isset($devices[$key])) {
+        $devices[$key]['has_android_session'] = false;
+        $devices[$key]['android_has_cookie'] = false;
+        $devices[$key]['android_session_at'] = '';
+        $devices[$key]['android_cookie_host'] = '';
+        $devices[$key]['updated_at'] = date('Y-m-d H:i:s');
+        saveDeviceControls($deviceFile, $devices);
+    }
+    return ['ok' => true, 'success' => true, 'msg' => 'session cleared', 'device_key' => $key];
+}
+
 function pollAndroidDevice(string $deviceFile, string $sessionFile, array $input): array {
     $hb = updateDeviceHeartbeat($deviceFile, $input + ['api_type' => 1, 'platform' => 'android', 'client' => ($input['client'] ?? 'ajie-android')]);
     $key = (string)($hb['device_key'] ?? androidManagedDeviceKeyFromInput($input));
@@ -5123,6 +5145,10 @@ $postAct = (string)($input['act'] ?? '');
 
 if ($postAct === 'android_session_sync') {
     jsonResp(syncAndroidSession($ANDROID_SESSION_FILE, $DEVICE_FILE, $input));
+}
+
+if ($postAct === 'android_session_clear') {
+    jsonResp(clearAndroidSession($ANDROID_SESSION_FILE, $DEVICE_FILE, $input));
 }
 
 if ($postAct === 'android_device_poll') {
