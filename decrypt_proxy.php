@@ -1056,6 +1056,29 @@ function pollAndroidDevice(string $deviceFile, string $sessionFile, array $input
     $command = $disabled ? 'stop' : (string)($device['android_command'] ?? 'run');
     if (!$hasSession && $command === 'run') $command = 'sync_session';
     $interval = max(10, (int)($device['android_poll_interval_seconds'] ?? 30));
+    if (isset($devices[$key])) {
+        $lastDelivered = (string)($devices[$key]['last_android_command_delivered'] ?? '');
+        if ($lastDelivered !== $command) {
+            global $LOG_FILE, $MAX_LOGS;
+            $devices[$key]['last_android_command_delivered'] = $command;
+            $devices[$key]['last_android_command_delivered_at'] = date('Y-m-d H:i:s');
+            $devices[$key]['android_command_delivered'] = true;
+            saveDeviceControls($deviceFile, $devices);
+            appendLog($LOG_FILE, [
+                'time' => date('Y-m-d H:i:s'),
+                'status' => 'android_command_delivered',
+                'source' => 'android_device_poll',
+                'msg' => 'Android app polled and received command',
+                'command' => $command,
+                'device_key' => $key,
+                'username' => (string)($device['username'] ?? ''),
+                'device_id' => (string)($device['device_id'] ?? ''),
+                'device_label' => (string)($device['device_label'] ?? ''),
+                'client' => (string)($device['client'] ?? 'ajie-android'),
+                'platform' => 'android',
+            ], $MAX_LOGS);
+        }
+    }
     return [
         'ok' => true,
         'success' => true,
@@ -1073,15 +1096,31 @@ function pollAndroidDevice(string $deviceFile, string $sessionFile, array $input
 }
 
 function updateAndroidDeviceCommand(string $deviceFile, string $key, string $command, int $pollInterval = 0): array {
+    global $LOG_FILE, $MAX_LOGS;
     $allowed = ['run', 'pause', 'stop', 'sync_session', 'clear_session'];
     if (!in_array($command, $allowed, true)) return ['ok' => false, 'msg' => 'bad command'];
     $devices = readDeviceControls($deviceFile);
     if ($key === '' || empty($devices[$key])) return ['ok' => false, 'msg' => 'device not found'];
     $devices[$key]['android_command'] = $command;
+    $devices[$key]['android_command_at'] = date('Y-m-d H:i:s');
+    $devices[$key]['android_command_delivered'] = false;
     if ($pollInterval > 0) $devices[$key]['android_poll_interval_seconds'] = max(10, min(300, $pollInterval));
     $devices[$key]['updated_at'] = date('Y-m-d H:i:s');
     saveDeviceControls($deviceFile, $devices);
-    return ['ok' => true, 'msg' => 'command saved', 'data' => $devices[$key]];
+    appendLog($LOG_FILE, [
+        'time' => date('Y-m-d H:i:s'),
+        'status' => 'android_command_saved',
+        'source' => 'android_admin_control',
+        'msg' => 'Android command saved, waiting for app poll',
+        'command' => $command,
+        'device_key' => $key,
+        'username' => (string)($devices[$key]['username'] ?? ''),
+        'device_id' => (string)($devices[$key]['device_id'] ?? ''),
+        'device_label' => (string)($devices[$key]['device_label'] ?? ''),
+        'client' => (string)($devices[$key]['client'] ?? 'ajie-android'),
+        'platform' => 'android',
+    ], $MAX_LOGS);
+    return ['ok' => true, 'msg' => 'command saved, waiting for app poll', 'data' => $devices[$key]];
 }
 
 function readUpdateConfig(string $file): array {
@@ -6431,7 +6470,7 @@ async function toggleDevice(deviceKey,disabled){if(!deviceKey)return;let reason=
 async function toggleDeviceUser(username,disabled){if(!username)return alert('缺少用户名');let reason='';if(disabled){reason=prompt('禁用该用户所有在线设备的原因', 'H5控制台禁用用户')||'';if(!confirm('禁用用户 '+username+' 的所有设备？'))return}else{if(!confirm('启用用户 '+username+' 的所有设备？'))return}const d=await api('device_toggle_user&username='+encodeURIComponent(username)+'&disabled='+disabled+'&reason='+encodeURIComponent(reason));if(d.ok===false)alert(d.msg||'操作失败');else alert(d.msg||'操作完成');await loadDevices()}
 async function clearLogs(){if(!confirm('确定清空日志和缓存数据？'))return;const d=await api('clear');alert(d.msg||'已清空');loadLogs()}
 function isAjieAndroidDeviceH5(x){const client=String(x&&x.client||'').toLowerCase();const label=String(x&&x.client_label||'').toLowerCase();return client==='ajie-android'||(label.includes('ajie')&&label.includes('android'))}
-async function setAndroidCommandH5(dk,cmd){if(!dk)return;await api('android_device_command&device_key='+encodeURIComponent(dk)+'&command='+encodeURIComponent(cmd));await loadAndroidControlH5()}
+async function setAndroidCommandH5(dk,cmd){if(!dk)return;const d=await api('android_device_command&device_key='+encodeURIComponent(dk)+'&command='+encodeURIComponent(cmd));if(d.ok===false){alert(d.msg||'command failed');return}alert('\u547d\u4ee4\u5df2\u4fdd\u5b58\uff0c\u7b49\u5f85 App \u4e0b\u6b21\u8f6e\u8be2\u6267\u884c\uff1a'+cmd);await loadAndroidControlH5()}
 async function loadAndroidControlH5(){const d=await api('devices');const rows=(d.data||[]).filter(isAjieAndroidDeviceH5);const cnt=document.getElementById('androidCountH5');const el=document.getElementById('androidControlListH5');if(cnt)cnt.textContent=rows.length;if(!el)return;if(!rows.length){el.innerHTML='<div class="empty">\u6682\u65e0\u5b89\u5353 App \u8bbe\u5907</div>';return}el.innerHTML=rows.map(x=>{const dk=x.device_key||x.key||'';const disabled=!!x.disabled;const sess=(x.has_android_session||x.android_has_cookie)?'\u5df2\u540c\u6b65':'\u672a\u540c\u6b65';const task=x.android_has_task_token?'\u4efb\u52a1\u5df2\u767b\u5f55':'\u4efb\u52a1\u672a\u767b\u5f55';return `<div class="item"><div class="row"><div class="item-title">${esc(x.username||'-')}</div><span class="tag ${disabled?'red':(x.online?'green':'amber')}">${disabled?'\u7981\u7528':(x.online?'\u5728\u7ebf':'\u79bb\u7ebf')}</span></div><div class="item-sub">\u8bbe\u5907\uff1a${esc(x.device_label||x.device_id||'-')}<br>\u4f1a\u8bdd\uff1a${sess} | ${task} | \u547d\u4ee4\uff1a${esc(x.android_command||'run')}<br>\u5fc3\u8df3\uff1a${esc(x.last_seen||'-')}</div><div class="actions"><button class="mini green" onclick="setAndroidCommandH5('${esc(dk)}','run')">\u542f\u52a8</button><button class="mini amber" onclick="setAndroidCommandH5('${esc(dk)}','pause')">\u6682\u505c</button><button class="mini primary" onclick="setAndroidCommandH5('${esc(dk)}','sync_session')">\u540c\u6b65\u4f1a\u8bdd</button><button class="mini red" onclick="setAndroidCommandH5('${esc(dk)}','clear_session')">\u6e05\u4f1a\u8bdd</button></div></div>`}).join('')}
 if(KEY){api('logs&limit=1').then(d=>{if(d.ok===false)logout();else openApp()}).catch(()=>logout())}
 </script>
@@ -8280,7 +8319,10 @@ async function toggleUserDevices(username,dis){
 
 async function setAndroidCommand(dk,cmd){
     if(!dk)return;
-    await authFetch(BASE+'?act=android_device_command&device_key='+encodeURIComponent(dk)+'&command='+encodeURIComponent(cmd));
+    const r=await authFetch(BASE+'?act=android_device_command&device_key='+encodeURIComponent(dk)+'&command='+encodeURIComponent(cmd));
+    const d=await r.json();
+    if(d.ok===false){alert(d.msg||'command failed');return;}
+    alert('\u547d\u4ee4\u5df2\u4fdd\u5b58\uff0c\u7b49\u5f85 App \u4e0b\u6b21\u8f6e\u8be2\u6267\u884c\uff1a'+cmd);
     if(currentPage==='android') loadAndroidControl(); else loadDevices();
 }
 function isAjieAndroidDevice(x){

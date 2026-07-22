@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - 'android-plugin/**'
+      - '.github/workflows/build-android.yml'
   workflow_dispatch:
 
 jobs:

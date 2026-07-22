@@ -153,21 +153,26 @@ public class TaskWorkerService extends Service {
 
     private String currentCookie() {
         String url = SessionStore.get(this, "web_cookie_url", "");
+        String saved = SessionStore.get(this, "web_cookie", "");
+        boolean imported = SessionStore.getBool(this, "web_cookie_imported", false);
         if (!url.isEmpty()) {
             try {
                 String live = CookieManager.getInstance().getCookie(url);
                 if (live != null && !live.trim().isEmpty()) {
+                    if (imported && saved.length() > live.length()) return saved;
                     SessionStore.put(this, "web_cookie", live);
                     return live;
                 }
             } catch (Exception ignored) {}
         }
-        return SessionStore.get(this, "web_cookie", "");
+        return saved;
     }
 
     private void clearSession() {
         SessionStore.put(this, "web_cookie", "");
+        SessionStore.put(this, "web_cookie_raw", "");
         SessionStore.put(this, "web_cookie_url", "");
+        SessionStore.putBool(this, "web_cookie_imported", false);
         SessionStore.put(this, "session_synced_at", "");
         try { CookieManager.getInstance().removeAllCookies(null); CookieManager.getInstance().flush(); } catch (Exception ignored) {}
         try {

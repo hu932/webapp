@@ -35,9 +35,9 @@ public final class DeviceInfo {
         o.put("device_id", androidId(c));
         o.put("fingerprint_key", fingerprintKey(c));
         o.put("username", SessionStore.username(c));
-        o.put("appVersion", "v1.1.1");
-        o.put("version", "1.1.1");
-        o.put("version_code", 4);
+        o.put("appVersion", "v1.1.3");
+        o.put("version", "1.1.3");
+        o.put("version_code", 6);
         return o;
     }
 

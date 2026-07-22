@@ -21,9 +21,14 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import org.json.JSONArray;
 import org.json.JSONObject;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
+import java.util.TimeZone;
 
 public class WebLoginActivity extends Activity {
     private TextView status;
@@ -31,13 +36,25 @@ public class WebLoginActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private long lastSyncAt = 0;
 
+    private static class CookieSpec {
+        String name = "";
+        String value = "";
+        String domain = "";
+        String path = "/";
+        String sameSite = "";
+        String expiresText = "";
+        long expirationSeconds = 0;
+        boolean secure = true;
+        boolean httpOnly = false;
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         status = new TextView(this);
-        status.setText("\u8bf7\u5728\u4e0b\u65b9 WebView \u624b\u52a8\u767b\u5f55\u867e\u76ae\u8d26\u53f7\uff1b\u5982\u679c\u5df2\u6709\u5f88\u957f\u7684 CK\uff0c\u70b9\u51fb\u3010\u5bfc\u5165 CK \u767b\u5f55\u3011\u5f39\u7a97\u7c98\u8d34\uff0cApp \u4f1a\u81ea\u52a8\u89e3\u6790\u3001\u7f6e\u5165\u3001\u540c\u6b65\u670d\u52a1\u5668\u3002");
+        status.setText("\u8bf7\u5728\u4e0b\u65b9 WebView \u624b\u52a8\u767b\u5f55\u867e\u76ae\u8d26\u53f7\uff1b\u5982\u679c\u5df2\u6709 CK\uff0c\u5efa\u8bae\u76f4\u63a5\u7c98\u8d34 Cookie-Editor \u5bfc\u51fa\u7684 JSON\uff0cApp \u4f1a\u6309\u6bcf\u6761 Cookie \u7684 domain/path \u7f6e\u5165\u3002");
         status.setPadding(18, 18, 18, 10);
 
         LinearLayout bar = new LinearLayout(this);
@@ -78,11 +95,11 @@ public class WebLoginActivity extends Activity {
 
     private void showCookieDialog() {
         EditText input = new EditText(this);
-        input.setHint("Cookie: a=b; c=d\n\u4e5f\u652f\u6301\u591a\u884c Set-Cookie \u6216\u76f4\u63a5\u7c98\u8d34\u6574\u6bb5 CK");
-        input.setText(SessionStore.get(this, "web_cookie", ""));
+        input.setHint("Cookie-Editor JSON \u6216 Cookie: a=b; c=d\n\u652f\u6301\u591a\u884c Set-Cookie\uff0c\u63a8\u8350\u7c98\u8d34 Cookie-Editor \u5bfc\u51fa JSON");
+        input.setText(SessionStore.get(this, "web_cookie_raw", SessionStore.get(this, "web_cookie", "")));
         input.setSingleLine(false);
-        input.setMinLines(8);
-        input.setMaxLines(16);
+        input.setMinLines(10);
+        input.setMaxLines(18);
         input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         input.setHorizontallyScrolling(false);
         input.setSelectAllOnFocus(false);
@@ -95,17 +112,14 @@ public class WebLoginActivity extends Activity {
 
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle("\u5bfc\u5165 / \u7f6e\u5165 CK")
-            .setMessage("\u7c98\u8d34\u957f CK \u540e\u70b9\u51fb\u3010\u5bfc\u5165\u5e76\u767b\u5f55\u3011\uff0c\u4f1a\u81ea\u52a8\u53bb\u6389 Cookie:/Set-Cookie: \u524d\u7f00\u548c path/domain/expires \u7b49\u5c5e\u6027\u3002")
+            .setMessage("\u5982\u679c\u4f60\u5728\u6d4f\u89c8\u5668 Cookie-Editor \u53ef\u4ee5\u767b\u5f55\uff0c\u8bf7\u4f18\u5148\u7c98\u8d34\u5b83\u5bfc\u51fa\u7684 JSON\uff0cApp \u4f1a\u6309 domain/path/secure/httpOnly \u81ea\u52a8\u5904\u7406\u3002")
             .setView(box)
             .setNegativeButton("\u53d6\u6d88", null)
             .setPositiveButton("\u5bfc\u5165\u5e76\u767b\u5f55", null)
             .create();
         dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
             String raw = input.getText().toString();
-            if (raw.trim().isEmpty()) {
-                input.setError("CK \u4e0d\u80fd\u4e3a\u7a7a");
-                return;
-            }
+            if (raw.trim().isEmpty()) { input.setError("CK \u4e0d\u80fd\u4e3a\u7a7a"); return; }
             dialog.dismiss();
             setCookieLogin(raw);
         }));
@@ -113,43 +127,86 @@ public class WebLoginActivity extends Activity {
     }
 
     private void setCookieLogin(String raw) {
-        List<String> items = parseCookieItems(raw);
-        if (items.isEmpty()) { status.setText("CK \u89e3\u6790\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u683c\u5f0f\uff1aa=b; c=d"); return; }
-        String url = SessionStore.get(this, "web_login_url", SessionStore.DEFAULT_WEB_LOGIN);
+        String loginUrl = SessionStore.get(this, "web_login_url", SessionStore.DEFAULT_WEB_LOGIN);
+        List<CookieSpec> items = parseCookieSpecs(raw, loginUrl);
+        if (items.isEmpty()) { status.setText("CK \u89e3\u6790\u5931\u8d25\uff0c\u8bf7\u7c98\u8d34 Cookie-Editor JSON \u6216 a=b; c=d"); return; }
         CookieManager cm = CookieManager.getInstance();
         cm.setAcceptCookie(true);
         cm.setAcceptThirdPartyCookies(webView, true);
         int count = 0;
         StringBuilder normalized = new StringBuilder();
-        for (String item : items) {
-            cm.setCookie(url, item + "; Path=/");
+        for (CookieSpec c : items) {
+            if (c.name.isEmpty()) continue;
+            String target = targetUrlForCookie(c, loginUrl);
+            cm.setCookie(target, toSetCookieHeader(c));
             if (normalized.length() > 0) normalized.append("; ");
-            normalized.append(item);
+            normalized.append(c.name).append("=").append(c.value);
             count++;
         }
         cm.flush();
         String cookie = normalized.toString();
+        SessionStore.put(this, "web_cookie_raw", raw);
         SessionStore.put(this, "web_cookie", cookie);
-        SessionStore.put(this, "web_cookie_url", url);
-        status.setText("\u5df2\u7f6e\u5165 CK\uff1a" + count + " \u9879\uff0c\u6b63\u5728\u540c\u6b65\u670d\u52a1\u5668");
-        syncSession(url, cookie, hostOf(url));
-        webView.loadUrl(url);
+        SessionStore.put(this, "web_cookie_url", loginUrl);
+        SessionStore.putBool(this, "web_cookie_imported", true);
+        status.setText("\u5df2\u6309 domain/path \u7f6e\u5165 CK\uff1a" + count + " \u9879\uff0c\u6b63\u5728\u6253\u5f00\u767b\u5f55\u9875\u5e76\u540c\u6b65\u670d\u52a1\u5668");
+        syncSession(loginUrl, cookie, hostOf(loginUrl));
+        handler.postDelayed(() -> webView.loadUrl(loginUrl), 350);
     }
 
-    private List<String> parseCookieItems(String raw) {
-        ArrayList<String> out = new ArrayList<>();
-        String text = raw == null ? "" : raw.replace('\r', '\n').trim();
+    private List<CookieSpec> parseCookieSpecs(String raw, String loginUrl) {
+        ArrayList<CookieSpec> out = new ArrayList<>();
+        String text = raw == null ? "" : raw.trim();
+        if (text.startsWith("[") || text.startsWith("{")) {
+            try {
+                JSONArray arr;
+                if (text.startsWith("[")) arr = new JSONArray(text);
+                else {
+                    JSONObject root = new JSONObject(text);
+                    arr = root.optJSONArray("cookies");
+                    if (arr == null) arr = root.optJSONArray("data");
+                    if (arr == null) arr = root.optJSONArray("exportedCookies");
+                }
+                if (arr != null) {
+                    for (int i = 0; i < arr.length(); i++) {
+                        JSONObject o = arr.optJSONObject(i);
+                        if (o == null) continue;
+                        CookieSpec c = new CookieSpec();
+                        c.name = o.optString("name", "").trim();
+                        c.value = String.valueOf(o.opt("value") == null ? "" : o.opt("value"));
+                        c.domain = o.optString("domain", o.optString("host", "")).trim();
+                        c.path = o.optString("path", "/").trim();
+                        if (c.path.isEmpty()) c.path = "/";
+                        c.secure = o.has("secure") ? o.optBoolean("secure", true) : true;
+                        c.httpOnly = o.optBoolean("httpOnly", o.optBoolean("http_only", false));
+                        c.sameSite = o.optString("sameSite", o.optString("same_site", "")).trim();
+                        Object exp = o.opt("expirationDate");
+                        if (exp == null) exp = o.opt("expires");
+                        if (exp instanceof Number) c.expirationSeconds = ((Number) exp).longValue();
+                        else if (exp != null) {
+                            try { c.expirationSeconds = (long) Double.parseDouble(String.valueOf(exp)); } catch (Exception ignored) {}
+                        }
+                        if (!c.name.isEmpty()) out.add(c);
+                    }
+                }
+            } catch (Exception ignored) {}
+            if (!out.isEmpty()) return out;
+        }
+        return parseTextCookies(text, loginUrl);
+    }
+
+    private List<CookieSpec> parseTextCookies(String text, String loginUrl) {
+        ArrayList<CookieSpec> out = new ArrayList<>();
+        String normalizedText = text.replace('\r', '\n');
         StringBuilder cookieLines = new StringBuilder();
-        String[] lines = text.split("\\n");
+        String[] lines = normalizedText.split("\\n");
         for (String line : lines) {
             String t = line.trim();
             if (t.isEmpty()) continue;
-            String lower = t.toLowerCase();
+            String lower = t.toLowerCase(Locale.US);
             if (lower.startsWith("set-cookie:")) {
-                String one = t.substring(t.indexOf(':') + 1).trim();
-                int semi = one.indexOf(';');
-                if (semi > 0) one = one.substring(0, semi).trim();
-                addCookieItem(out, one);
+                CookieSpec c = parseSetCookie(t.substring(t.indexOf(':') + 1).trim());
+                if (c != null) out.add(c);
             } else if (lower.startsWith("cookie:")) {
                 if (cookieLines.length() > 0) cookieLines.append(';');
                 cookieLines.append(t.substring(t.indexOf(':') + 1).trim());
@@ -158,18 +215,90 @@ public class WebLoginActivity extends Activity {
                 cookieLines.append(t);
             }
         }
-        if (cookieLines.length() == 0 && text.contains("=")) cookieLines.append(text);
+        if (cookieLines.length() == 0 && normalizedText.contains("=")) cookieLines.append(normalizedText);
         String merged = cookieLines.toString().replace('\n', ';').replace('\t', ' ');
-        for (String part : merged.split(";")) addCookieItem(out, part.trim());
+        String host = hostOf(loginUrl);
+        for (String part : merged.split(";")) {
+            CookieSpec c = parseNameValue(part.trim());
+            if (c == null) continue;
+            c.domain = host;
+            c.path = "/";
+            out.add(c);
+        }
         return out;
     }
 
-    private void addCookieItem(List<String> out, String item) {
-        item = item == null ? "" : item.trim();
-        if (item.isEmpty() || !item.contains("=")) return;
-        String lower = item.toLowerCase();
-        if (lower.startsWith("path=") || lower.startsWith("domain=") || lower.startsWith("expires=") || lower.startsWith("max-age=") || lower.equals("secure") || lower.equals("httponly") || lower.startsWith("samesite=")) return;
-        out.add(item);
+    private CookieSpec parseSetCookie(String line) {
+        String[] parts = line.split(";");
+        CookieSpec c = parseNameValue(parts.length > 0 ? parts[0].trim() : "");
+        if (c == null) return null;
+        for (int i = 1; i < parts.length; i++) {
+            String attr = parts[i].trim();
+            String lower = attr.toLowerCase(Locale.US);
+            int eq = attr.indexOf('=');
+            String val = eq >= 0 ? attr.substring(eq + 1).trim() : "";
+            if (lower.startsWith("domain=")) c.domain = val;
+            else if (lower.startsWith("path=")) c.path = val.isEmpty() ? "/" : val;
+            else if (lower.startsWith("expires=")) c.expiresText = val;
+            else if (lower.startsWith("max-age=")) {
+                try { c.expirationSeconds = System.currentTimeMillis() / 1000 + Long.parseLong(val); } catch (Exception ignored) {}
+            } else if (lower.equals("secure")) c.secure = true;
+            else if (lower.equals("httponly")) c.httpOnly = true;
+            else if (lower.startsWith("samesite=")) c.sameSite = val;
+        }
+        return c;
+    }
+
+    private CookieSpec parseNameValue(String item) {
+        if (item == null) return null;
+        item = item.trim();
+        if (item.isEmpty() || !item.contains("=")) return null;
+        String lower = item.toLowerCase(Locale.US);
+        if (lower.startsWith("path=") || lower.startsWith("domain=") || lower.startsWith("expires=") || lower.startsWith("max-age=") || lower.equals("secure") || lower.equals("httponly") || lower.startsWith("samesite=")) return null;
+        int eq = item.indexOf('=');
+        CookieSpec c = new CookieSpec();
+        c.name = item.substring(0, eq).trim();
+        c.value = item.substring(eq + 1).trim();
+        return c.name.isEmpty() ? null : c;
+    }
+
+    private String targetUrlForCookie(CookieSpec c, String fallbackUrl) {
+        String domain = c.domain == null ? "" : c.domain.trim();
+        while (domain.startsWith(".")) domain = domain.substring(1);
+        if (domain.isEmpty()) return fallbackUrl;
+        return "https://" + domain + (c.path == null || c.path.isEmpty() ? "/" : c.path);
+    }
+
+    private String toSetCookieHeader(CookieSpec c) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(c.name).append("=").append(c.value);
+        sb.append("; Path=").append(c.path == null || c.path.isEmpty() ? "/" : c.path);
+        if (c.domain != null && !c.domain.trim().isEmpty()) sb.append("; Domain=").append(c.domain.trim());
+        if (c.expirationSeconds > 0) sb.append("; Expires=").append(httpDate(c.expirationSeconds));
+        else if (c.expiresText != null && !c.expiresText.isEmpty()) sb.append("; Expires=").append(c.expiresText);
+        if (c.secure) sb.append("; Secure");
+        if (c.httpOnly) sb.append("; HttpOnly");
+        String ss = normalizeSameSite(c.sameSite);
+        if (!ss.isEmpty()) sb.append("; SameSite=").append(ss);
+        return sb.toString();
+    }
+
+    private String normalizeSameSite(String sameSite) {
+        if (sameSite == null) return "";
+        String s = sameSite.trim().toLowerCase(Locale.US);
+        if (s.isEmpty() || "unspecified".equals(s)) return "";
+        if ("no_restriction".equals(s) || "none".equals(s)) return "None";
+        if ("lax".equals(s)) return "Lax";
+        if ("strict".equals(s)) return "Strict";
+        return sameSite.trim();
+    }
+
+    private String httpDate(long seconds) {
+        try {
+            SimpleDateFormat f = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.US);
+            f.setTimeZone(TimeZone.getTimeZone("GMT"));
+            return f.format(new Date(seconds * 1000L));
+        } catch (Exception e) { return ""; }
     }
 
     private void clearWebCookies() {
@@ -177,7 +306,9 @@ public class WebLoginActivity extends Activity {
         cm.removeAllCookies(value -> handler.post(() -> {
             cm.flush();
             SessionStore.put(WebLoginActivity.this, "web_cookie", "");
+            SessionStore.put(WebLoginActivity.this, "web_cookie_raw", "");
             SessionStore.put(WebLoginActivity.this, "web_cookie_url", "");
+            SessionStore.putBool(WebLoginActivity.this, "web_cookie_imported", false);
             SessionStore.put(WebLoginActivity.this, "session_synced_at", "");
             notifyServerClearSession();
             status.setText("CK \u5df2\u6e05\u9664");
@@ -200,8 +331,14 @@ public class WebLoginActivity extends Activity {
         String cookie = cm.getCookie(url);
         if (cookie == null || cookie.trim().isEmpty()) return;
         cm.flush();
-        SessionStore.put(this, "web_cookie", cookie);
-        SessionStore.put(this, "web_cookie_url", url);
+        String saved = SessionStore.get(this, "web_cookie", "");
+        boolean imported = SessionStore.getBool(this, "web_cookie_imported", false);
+        if (imported && saved.length() > cookie.length()) {
+            cookie = saved;
+        } else {
+            SessionStore.put(this, "web_cookie", cookie);
+            SessionStore.put(this, "web_cookie_url", url);
+        }
         status.setText("Cookie \u5df2\u4fdd\u5b58\uff0c\u6b63\u5728\u540c\u6b65\u5230\u670d\u52a1\u5668\uff1a" + host);
         long now = System.currentTimeMillis();
         if (now - lastSyncAt < 5000) return;
