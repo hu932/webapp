@@ -12,6 +12,8 @@ import android.os.Looper;
 import android.text.InputType;
 import android.view.View;
 import android.webkit.CookieManager;
+import android.webkit.WebChromeClient;
+import android.webkit.WebViewTransport;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -54,12 +56,13 @@ public class WebLoginActivity extends Activity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         status = new TextView(this);
-        status.setText("\u8bf7\u5728\u4e0b\u65b9 WebView \u624b\u52a8\u767b\u5f55\u867e\u76ae\u8d26\u53f7\uff1b\u5982\u679c\u5df2\u6709 CK\uff0c\u5efa\u8bae\u76f4\u63a5\u7c98\u8d34 Cookie-Editor \u5bfc\u51fa\u7684 JSON\uff0cApp \u4f1a\u6309\u6bcf\u6761 Cookie \u7684 domain/path \u7f6e\u5165\u3002");
+        status.setText("\u8bf7\u5728\u4e0b\u65b9 WebView \u624b\u52a8\u767b\u5f55\u867e\u76ae\u8d26\u53f7\uff1bApp \u5df2\u4f7f\u7528 Chrome UA \u548c\u5f39\u7a97\u652f\u6301\uff0c\u5982\u679c\u867e\u76ae\u4ecd\u4e0d\u663e\u793a Google \u767b\u5f55\uff0c\u5efa\u8bae\u7528 Cookie-Editor JSON \u5bfc\u5165 CK\u3002");
         status.setPadding(18, 18, 18, 10);
 
         LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.addView(button("\u5bfc\u5165 CK \u767b\u5f55", v -> showCookieDialog()), new LinearLayout.LayoutParams(0, -2, 1f));
+        bar.addView(button("\u5237\u65b0", v -> reloadLoginPage()), new LinearLayout.LayoutParams(0, -2, 1f));
         bar.addView(button("\u6e05\u9664 CK", v -> clearWebCookies()), new LinearLayout.LayoutParams(0, -2, 1f));
 
         webView = new WebView(this);
@@ -74,9 +77,40 @@ public class WebLoginActivity extends Activity {
         s.setDatabaseEnabled(true);
         s.setUseWideViewPort(true);
         s.setLoadWithOverviewMode(true);
+        s.setJavaScriptCanOpenWindowsAutomatically(true);
+        s.setSupportMultipleWindows(true);
+        s.setUserAgentString(chromeUserAgent());
+        if (Build.VERSION.SDK_INT >= 21) s.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
         CookieManager cm = CookieManager.getInstance();
         cm.setAcceptCookie(true);
         cm.setAcceptThirdPartyCookies(webView, true);
+
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, android.os.Message resultMsg) {
+                WebView child = new WebView(WebLoginActivity.this);
+                WebSettings cs = child.getSettings();
+                cs.setJavaScriptEnabled(true);
+                cs.setDomStorageEnabled(true);
+                cs.setDatabaseEnabled(true);
+                cs.setJavaScriptCanOpenWindowsAutomatically(true);
+                cs.setSupportMultipleWindows(true);
+                cs.setUserAgentString(chromeUserAgent());
+                if (Build.VERSION.SDK_INT >= 21) cs.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
+                child.setWebViewClient(new WebViewClient() {
+                    @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                        webView.loadUrl(request.getUrl().toString());
+                        return true;
+                    }
+                    @Override public void onPageFinished(WebView view, String url) {
+                        webView.loadUrl(url);
+                    }
+                });
+                WebViewTransport transport = (WebViewTransport) resultMsg.obj;
+                transport.setWebView(child);
+                resultMsg.sendToTarget();
+                return true;
+            }
+        });
 
         webView.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) { return false; }
@@ -91,6 +125,16 @@ public class WebLoginActivity extends Activity {
         b.setAllCaps(false);
         b.setOnClickListener(l);
         return b;
+    }
+
+    private void reloadLoginPage() {
+        String url = SessionStore.get(this, "web_login_url", SessionStore.DEFAULT_WEB_LOGIN);
+        status.setText("\u5df2\u4f7f\u7528 Chrome UA \u5237\u65b0\u767b\u5f55\u9875\uff0c\u6b63\u5728\u91cd\u65b0\u52a0\u8f7d\u3002");
+        webView.loadUrl(url);
+    }
+
+    private String chromeUserAgent() {
+        return "Mozilla/5.0 (Linux; Android " + Build.VERSION.RELEASE + "; " + Build.MODEL + ") AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36";
     }
 
     private void showCookieDialog() {
