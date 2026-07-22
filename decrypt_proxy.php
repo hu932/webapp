@@ -6339,6 +6339,9 @@ function renderH5Page(): void {
     <section id="page-devices" class="page">
       <div class="card"><div class="card-head"><h3>在线设备</h3><span id="onlineCount" class="tag green">0</span></div><div id="deviceList" class="list"><div class="empty">加载中...</div></div></div>
     </section>
+    <section id="page-android" class="page">
+      <div class="card"><div class="card-head"><h3>&#x5B89;&#x5353;&#x63A7;&#x5236;</h3><span id="androidCountH5" class="tag green">0</span></div><div id="androidControlListH5" class="list"><div class="empty">&#x52A0;&#x8F7D;&#x4E2D;...</div></div></div>
+    </section>
     <section id="page-logs" class="page">
       <div class="card"><div class="card-head"><h3>转发日志</h3><button class="btn small red" onclick="clearLogs()">清空</button></div><div class="toolbar"><input class="search" id="logSearch" placeholder="搜索账号 / 状态 / 来源 / 任务" oninput="renderLogCache()"><button class="btn small" onclick="loadLogs()">刷新</button></div><div id="logList" class="list"><div class="empty">加载中...</div></div></div>
     </section>
@@ -6349,6 +6352,7 @@ function renderH5Page(): void {
     <button class="tab" data-page="tasks" onclick="showPage('tasks')">任务</button>
     <button class="tab" data-page="accounts" onclick="showPage('accounts')">账号</button>
     <button class="tab" data-page="devices" onclick="showPage('devices')">设备</button>
+    <button class="tab" data-page="android" onclick="showPage('android')">&#x5B89;&#x5353;</button>
     <button class="tab" data-page="logs" onclick="showPage('logs')">日志</button>
   </nav>
 </section>
@@ -6372,7 +6376,7 @@ const BASE = location.pathname;
 let KEY = localStorage.getItem('h5_admin_key') || '';
 let currentPage = 'home';
 let logCache = [];
-const titles = {home:'概览',tasks:'任务监控',accounts:'插件账号',devices:'在线设备',logs:'转发日志'};
+const titles = {home:'\u6982\u89c8',tasks:'\u4efb\u52a1\u76d1\u63a7',accounts:'\u63d2\u4ef6\u8d26\u53f7',devices:'\u5728\u7ebf\u8bbe\u5907',android:'\u5b89\u5353\u63a7\u5236',logs:'\u8f6c\u53d1\u65e5\u5fd7'};
 function esc(v){return String(v??'').replace(/[&<>"]/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s]))}
 function short(v,n=90){v=String(v||'');return v.length>n?v.slice(0,n-3)+'...':v}
 function deviceLabelFromLog(log){
@@ -6411,7 +6415,7 @@ async function submitPasswordChange(){
   }catch(e){result.textContent='网络错误'}
 }
 function showPage(name){currentPage=name;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+name).classList.add('active');document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.page===name));document.getElementById('pageTitle').textContent=titles[name]||name;refreshCurrent()}
-function refreshCurrent(){document.getElementById('subTitle').textContent=new Date().toLocaleString();if(currentPage==='home')loadHome();else if(currentPage==='tasks')loadTasks();else if(currentPage==='accounts')loadAccounts();else if(currentPage==='devices')loadDevices();else if(currentPage==='logs')loadLogs()}
+function refreshCurrent(){document.getElementById('subTitle').textContent=new Date().toLocaleString();if(currentPage==='home')loadHome();else if(currentPage==='tasks')loadTasks();else if(currentPage==='accounts')loadAccounts();else if(currentPage==='devices')loadDevices();else if(currentPage==='android')loadAndroidControlH5();else if(currentPage==='logs')loadLogs()}
 function stat(label,value,cls=''){return `<div class="stat"><div class="label">${esc(label)}</div><div class="value ${cls}">${esc(value)}</div></div>`}
 async function loadHome(){const [logs,dev,sql,acc]=await Promise.allSettled([api('logs&limit=10'),api('devices'),api('sqlite_monitor'),api('decoded_ext_accounts')]);const l=logs.value?.data||[];const devices=dev.value?.data||[];const sqlData=sql.value?.data||{};const accounts=acc.value?.data||[];document.getElementById('homeStats').innerHTML=stat('在线设备',dev.value?.online_count||0,'green')+stat('插件账号',accounts.length,'blue')+stat('Queue',sqlData.tables?.task_queue?.rows||0)+stat('Lease',sqlData.tables?.task_leases?.rows||0,'red');renderLogs(l,'homeLogs',6)}
 async function loadTasks(){const d=await api('sqlite_monitor');const data=d.data||{};document.getElementById('taskStats').innerHTML=stat('Queue',data.tables?.task_queue?.rows||0,'blue')+stat('Lease',data.tables?.task_leases?.rows||0,'red')+stat('数据库',sizeText((data.files||[]).reduce((s,f)=>s+Number(f.bytes||0),0)))+stat('健康',data.metrics?.quick_check||'-','green');const groups=data.lease_groups||[];document.getElementById('leaseGroups').innerHTML=groups.length?groups.map(g=>`<div class="item"><div class="row"><div class="item-title">${esc(g.account_id)}</div><span class="tag blue">${Number(g.lease_count||0)}</span></div><div class="item-sub">${esc(short(g.runtime_scope,120))}<br>最新：${esc(g.latest_at||'-')}</div></div>`).join(''):'<div class="empty">暂无 Lease 分组</div>';const leases=data.recent_leases||[];document.getElementById('recentLeases').innerHTML=leases.length?leases.map(x=>`<div class="item"><div class="item-title">${esc(x.task_id||'-')}</div><div class="item-sub">${esc(short(x.task_url,110))}<br>账号：${esc(x.task_account_username||'-')} | ${ageText(x.age_seconds)}</div></div>`).join(''):'<div class="empty">暂无 Lease</div>'}
@@ -6426,6 +6430,9 @@ async function deleteAccount(accountId){if(!accountId)return;if(!confirm('删除
 async function toggleDevice(deviceKey,disabled){if(!deviceKey)return;let reason='';if(disabled){reason=prompt('禁用原因', 'H5控制台禁用')||''}const d=await api('device_toggle&device_key='+encodeURIComponent(deviceKey)+'&disabled='+disabled+'&reason='+encodeURIComponent(reason));if(d.ok===false)alert(d.msg||'操作失败');await loadDevices()}
 async function toggleDeviceUser(username,disabled){if(!username)return alert('缺少用户名');let reason='';if(disabled){reason=prompt('禁用该用户所有在线设备的原因', 'H5控制台禁用用户')||'';if(!confirm('禁用用户 '+username+' 的所有设备？'))return}else{if(!confirm('启用用户 '+username+' 的所有设备？'))return}const d=await api('device_toggle_user&username='+encodeURIComponent(username)+'&disabled='+disabled+'&reason='+encodeURIComponent(reason));if(d.ok===false)alert(d.msg||'操作失败');else alert(d.msg||'操作完成');await loadDevices()}
 async function clearLogs(){if(!confirm('确定清空日志和缓存数据？'))return;const d=await api('clear');alert(d.msg||'已清空');loadLogs()}
+function isAjieAndroidDeviceH5(x){const client=String(x&&x.client||'').toLowerCase();const label=String(x&&x.client_label||'').toLowerCase();return client==='ajie-android'||(label.includes('ajie')&&label.includes('android'))}
+async function setAndroidCommandH5(dk,cmd){if(!dk)return;await api('android_device_command&device_key='+encodeURIComponent(dk)+'&command='+encodeURIComponent(cmd));await loadAndroidControlH5()}
+async function loadAndroidControlH5(){const d=await api('devices');const rows=(d.data||[]).filter(isAjieAndroidDeviceH5);const cnt=document.getElementById('androidCountH5');const el=document.getElementById('androidControlListH5');if(cnt)cnt.textContent=rows.length;if(!el)return;if(!rows.length){el.innerHTML='<div class="empty">\u6682\u65e0\u5b89\u5353 App \u8bbe\u5907</div>';return}el.innerHTML=rows.map(x=>{const dk=x.device_key||x.key||'';const disabled=!!x.disabled;const sess=(x.has_android_session||x.android_has_cookie)?'\u5df2\u540c\u6b65':'\u672a\u540c\u6b65';const task=x.android_has_task_token?'\u4efb\u52a1\u5df2\u767b\u5f55':'\u4efb\u52a1\u672a\u767b\u5f55';return `<div class="item"><div class="row"><div class="item-title">${esc(x.username||'-')}</div><span class="tag ${disabled?'red':(x.online?'green':'amber')}">${disabled?'\u7981\u7528':(x.online?'\u5728\u7ebf':'\u79bb\u7ebf')}</span></div><div class="item-sub">\u8bbe\u5907\uff1a${esc(x.device_label||x.device_id||'-')}<br>\u4f1a\u8bdd\uff1a${sess} | ${task} | \u547d\u4ee4\uff1a${esc(x.android_command||'run')}<br>\u5fc3\u8df3\uff1a${esc(x.last_seen||'-')}</div><div class="actions"><button class="mini green" onclick="setAndroidCommandH5('${esc(dk)}','run')">\u542f\u52a8</button><button class="mini amber" onclick="setAndroidCommandH5('${esc(dk)}','pause')">\u6682\u505c</button><button class="mini primary" onclick="setAndroidCommandH5('${esc(dk)}','sync_session')">\u540c\u6b65\u4f1a\u8bdd</button><button class="mini red" onclick="setAndroidCommandH5('${esc(dk)}','clear_session')">\u6e05\u4f1a\u8bdd</button></div></div>`}).join('')}
 if(KEY){api('logs&limit=1').then(d=>{if(d.ok===false)logout();else openApp()}).catch(()=>logout())}
 </script>
 </body>
@@ -7740,6 +7747,7 @@ body.h5-mode pre.resp{font-size:12px;max-height:55vh}
         <div class="menu-item active" onclick="switchPage('dashboard',this)"><i class="menu-icon">&#9632;</i>仪表盘</div>
         <div class="menu-item" data-page-menu="logs" onclick="switchPage('logs',this)"><i class="menu-icon">&#9776;</i>转发日志</div>
         <div class="menu-item" onclick="switchPage('devices',this)"><i class="menu-icon">&#9679;</i>在线设备</div>
+        <div class="menu-item" onclick="switchPage('android',this)"><i class="menu-icon">&#128241;</i>&#x5B89;&#x5353;&#x63A7;&#x5236;</div>
         <div class="menu-item" onclick="switchPage('stats',this)"><i class="menu-icon">&#9733;</i>环境统计</div>
         <div class="menu-item" onclick="switchPage('accounts',this)"><i class="menu-icon">&#9737;</i>账号授权</div>
         <div class="menu-item" onclick="switchPage('update',this)"><i class="menu-icon">&#8679;</i>更新发布</div>
@@ -8040,7 +8048,7 @@ function showAdmin() {
 
 if (KEY) { authFetch(BASE+'?act=logs&limit=1').then(r=>r.json()).then(d=>{ if(d.ok!==false||d.msg!=='密码错误') showAdmin(); else { KEY=''; localStorage.removeItem('admin_key'); }}).catch(()=>{}); }
 
-const pageTitles = {dashboard:'仪表盘',logs:'转发日志',devices:'在线设备',stats:'指纹环境管理',extconfig:'浏览器插件配置',accounts:'账号授权',update:'更新发布',verctrl:'版本控制',data:'解密数据',cache:'缓存清理'};
+const pageTitles = {dashboard:'\u4eea\u8868\u76d8',logs:'\u8f6c\u53d1\u65e5\u5fd7',devices:'\u5728\u7ebf\u8bbe\u5907',android:'\u5b89\u5353\u63a7\u5236',stats:'\u6307\u7eb9\u73af\u5883\u7ba1\u7406',extconfig:'\u6d4f\u89c8\u5668\u63d2\u4ef6\u914d\u7f6e',accounts:'\u8d26\u53f7\u6388\u6743',update:'\u66f4\u65b0\u53d1\u5e03',verctrl:'\u7248\u672c\u63a7\u5236',data:'\u89e3\u5bc6\u6570\u636e',cache:'\u7f13\u5b58\u6e05\u7406'};
 let currentPage = 'dashboard';
 pageTitles.jsonmon = 'JSON文件监控';
 pageTitles.sqlite = 'SQLite运行监控';
@@ -8234,17 +8242,13 @@ async function loadDevices() {
             const singleBtn=dis
                 ?`<button class="btn btn-success btn-sm" onclick="toggleDevice('${esc(dv.key)}',0)">\u542f\u7528</button>`
                 :`<button class="btn btn-danger btn-sm" onclick="toggleDevice('${esc(dv.key)}',1)">\u7981\u7528</button>`;
-            const cmd=dv.android_command||'run';
-            const hasSession=!!dv.has_android_session;
-            const cmdBtns=`<button class="btn btn-success btn-sm" onclick="setAndroidCommand('${esc(dv.key)}','run')">\u542f\u52a8</button><button class="btn btn-warning btn-sm" onclick="setAndroidCommand('${esc(dv.key)}','pause')">\u6682\u505c</button><button class="btn btn-default btn-sm" onclick="setAndroidCommand('${esc(dv.key)}','sync_session')">\u540c\u6b65\u4f1a\u8bdd</button><button class="btn btn-danger btn-sm" onclick="setAndroidCommand('${esc(dv.key)}','clear_session')">\u6e05\u4f1a\u8bdd</button>`;
             return `<tr>
                 <td>${st}</td>
                 <td>${esc(deviceLabel)} ${esc(dv.fingerprint_name||((dv.fingerprint_id||dv.fingerprint_key||'').substring(0,14))||'-')}</td>
                 <td style="font-size:12px">${esc((dv.device_id||'-').substring(0,14))}</td>
                 <td style="font-size:12px">${esc(dv.ip||'-')}</td>
                 <td style="font-size:12px;color:var(--muted)">${esc((dv.last_seen||'').substring(11)||'-')}</td>
-                <td style="font-size:12px">${hasSession?'\u5df2\u540c\u6b65':'\u672a\u540c\u6b65'} / ${esc(cmd)}</td>
-                <td style="display:flex;gap:6px;flex-wrap:wrap">${singleBtn}${cmdBtns}</td>
+                <td style="display:flex;gap:6px;flex-wrap:wrap">${singleBtn}</td>
             </tr>`;
         }).join('');
 
@@ -8277,7 +8281,12 @@ async function toggleUserDevices(username,dis){
 async function setAndroidCommand(dk,cmd){
     if(!dk)return;
     await authFetch(BASE+'?act=android_device_command&device_key='+encodeURIComponent(dk)+'&command='+encodeURIComponent(cmd));
-    loadDevices();
+    if(currentPage==='android') loadAndroidControl(); else loadDevices();
+}
+function isAjieAndroidDevice(x){
+    const client=String(x&&x.client||'').toLowerCase();
+    const label=String(x&&x.client_label||'').toLowerCase();
+    return client==='ajie-android' || (label.includes('ajie') && label.includes('android'));
 }
 
 // ===== Stats =====
@@ -8286,7 +8295,7 @@ async function loadAndroidControl(){
     const r=await authFetch(BASE+'?act=devices');
     const d=await r.json();
     if(!d.ok)return;
-    const rows=(d.data||[]).filter(x=>String(x.platform||x.device_type||x.client||'').toLowerCase().includes('android') || String(x.client||'').includes('ajie-android'));
+    const rows=(d.data||[]).filter(isAjieAndroidDevice);
     const el=document.getElementById('androidControlList');
     const cnt=document.getElementById('androidCount');
     if(cnt)cnt.textContent='('+rows.length+' \u53f0)';
@@ -8303,7 +8312,7 @@ async function loadAndroidControl(){
 }
 async function androidCommandAll(cmd){
     const r=await authFetch(BASE+'?act=devices'); const d=await r.json();
-    const rows=(d.data||[]).filter(x=>String(x.platform||x.device_type||x.client||'').toLowerCase().includes('android') || String(x.client||'').includes('ajie-android'));
+    const rows=(d.data||[]).filter(isAjieAndroidDevice);
     for(const dv of rows){ if(dv.key) await authFetch(BASE+'?act=android_device_command&device_key='+encodeURIComponent(dv.key)+'&command='+encodeURIComponent(cmd)); }
     loadAndroidControl();
 }
@@ -8641,7 +8650,7 @@ async function saveExtBatchFromModal(){
     if(!batch)return alert('\u8bf7\u8f93\u5165\u4efb\u52a1\u8d26\u53f7\u548c\u5bc6\u7801');
     const r=await authFetch(BASE+'?act=decoded_ext_account_batch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({batch})});
     const d=await r.json();
-    if(!d.ok)return alert(d.msg||'??????');
+    if(!d.ok)return alert(d.msg||'\u64cd\u4f5c\u5931\u8d25');
     closeAccountModal();
     await loadApi1Accounts();
     const text=(d.created||[]).map(a=>extConfigText(a)).join('\n\n');
