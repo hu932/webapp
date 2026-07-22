@@ -2007,7 +2007,7 @@ function renderPage(): void {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>格界APP控制台</title>
+<title>AjieAPP控制台</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -2180,7 +2180,7 @@ pre.resp{background:#f8fafc;padding:12px 14px;border-radius:8px;font-size:12px;o
     <div style="text-align:center;margin-bottom:20px">
         <img src="1777990327149137925.png" alt="logo" style="width:80px;height:80px;border-radius:16px;object-fit:cover;box-shadow:0 8px 24px rgba(0,0,0,.15)">
     </div>
-    <h1>格界APP控制台</h1>
+    <h1>AjieAPP控制台</h1>
     <p>日志监控 / 设备管理 / 数据统计</p>
     <input type="password" id="loginPwd" placeholder="请输入管理密码" onkeydown="if(event.key==='Enter')doLogin()">
     <button onclick="doLogin()">登 录</button>
@@ -2194,7 +2194,7 @@ pre.resp{background:#f8fafc;padding:12px 14px;border-radius:8px;font-size:12px;o
         <div class="sidebar-logo-icon">
             <img src="1777990327149137925.png" alt="logo" style="width:100%;height:100%;object-fit:cover;border-radius:9px">
         </div>
-        格界控制台
+        Ajie控制台
     </div>
     <div class="sidebar-menu">
         <div class="menu-item active" onclick="switchPage('dashboard',this)"><i class="menu-icon">&#9632;</i>仪表盘</div>

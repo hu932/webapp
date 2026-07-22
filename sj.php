@@ -655,7 +655,7 @@ if ($act === 'query') {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>格界公共查询</title>
+<title>Ajie公共查询</title>
 <style>
 :root{--primary:#6366f1;--primary-dark:#4f46e5;--info:#7c3aed;--success:#10b981;--danger:#ef4444;--warning:#f59e0b;--ink:#111827;--muted:#64748b;--soft:#f8fafc;--line:#e2e8f0;--card:#fff;--shadow:0 18px 45px rgba(15,23,42,.12);--font:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",Arial,sans-serif;--bg-image:url('1777990939581269311.png');--bg-tint:linear-gradient(120deg,rgba(238,242,255,.24),rgba(240,253,250,.18));--card-bg:rgba(255,255,255,.88);--card-border:rgba(226,232,240,.82);--topbar-bg:linear-gradient(135deg,rgba(255,255,255,.84),rgba(248,250,252,.62));--topbar-border:rgba(255,255,255,.68);--brand-color:#0f172a;--stat-value-color:#0f172a;--log-border:#f1f5f9;--log-text:#334155;--code-bg:#f1f5f9;--code-border:#e2e8f0;--code-color:#0f172a;--upload-bg:#fff;--upload-border:#cbd5e1}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -764,7 +764,7 @@ body[data-theme="dark"] .daily-metric,body[data-theme="ocean"] .daily-metric,bod
 <body>
 <div class="login-wrap" id="loginPage">
     <div class="login-box">
-        <h1>格界查询</h1>
+        <h1>Ajie查询</h1>
         <p>输入授权账号查看自己的提交情况</p>
         <input id="accountInput" autocomplete="username" placeholder="请输入白名单账号">
         <button id="loginBtn" onclick="login()">进入查询</button>
@@ -778,7 +778,7 @@ body[data-theme="dark"] .daily-metric,body[data-theme="ocean"] .daily-metric,bod
             <div class="brand-block">
                 <div class="brand-mark"><img src="1777990327149137925.png" alt=""></div>
                 <div class="brand-copy">
-                    <div class="brand-title">格界查询</div>
+                    <div class="brand-title">Ajie查询</div>
                     <div class="brand-sub"><span class="account-chip"><span>账号</span>&nbsp;<b id="accountName"></b></span><span id="accountRemark"></span></div>
                 </div>
             </div>

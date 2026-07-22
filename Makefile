@@ -4,11 +4,11 @@ THEOS_PACKAGE_SCHEME = rootless
 
 include $(THEOS)/makefiles/common.mk
 
-TWEAK_NAME = ShopeeTaskHook
+TWEAK_NAME = Ajie
 
-ShopeeTaskHook_FILES = Tweak.xm
-ShopeeTaskHook_FRAMEWORKS = Foundation UIKit
-ShopeeTaskHook_LIBRARIES = z
-ShopeeTaskHook_CFLAGS = -fobjc-arc -Wno-error=deprecated-declarations
+Ajie_FILES = Tweak.xm
+Ajie_FRAMEWORKS = Foundation UIKit
+Ajie_LIBRARIES = z
+Ajie_CFLAGS = -fobjc-arc -Wno-error=deprecated-declarations
 
 include $(THEOS_MAKE_PATH)/tweak.mk

@@ -1,5 +1,5 @@
-Package: com.codex.shopeetaskhook
-Name: Gejieios
+Package: com.codex.ajie
+Name: Ajie
 Version: 0.1.0
 Architecture: iphoneos-arm
 Description: Rebuilt Shopee task helper for iOS 15/16 rootless devices.

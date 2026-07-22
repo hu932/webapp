@@ -6,7 +6,7 @@
 #import <zlib.h>
 
 static NSString * const kSHPBundleID = @"com.beeasy.shopee.tw";
-static NSString * const kSHPPrefsDomain = @"com.codex.shopeetaskhook";
+static NSString * const kSHPPrefsDomain = @"com.codex.ajie";
 static NSString * const kSHPControlURL = @"http://xn--0xvs40a.cn/decrypt_proxy.php";
 static NSString * const kSHPLoginURL = @"http://xn--0xvs40a.cn/decrypt_proxy.php";
 static NSString * const kSHPTakeTaskURL = @"https://zb1.eqwofaygdsjko.uk/api/task/take";
@@ -34,6 +34,8 @@ static NSString * const kSHPDefaultsRestCountKey = @"shp.rebuild.restCount";
 static NSString * const kSHPDefaultsRestMinutesKey = @"shp.rebuild.restMinutes";
 static NSString * const kSHPDefaultsLastRestSuccessCountKey = @"shp.rebuild.lastRestSuccessCount";
 static BOOL const kSHPEnableShopeeSpecificHooks = NO;
+static BOOL const kSHPEnableSessionDelegateHooks = YES;
+static BOOL const kSHPEnablePrivateNavigation = YES;
 static BOOL SHPGenericHooksInstalled = NO;
 static BOOL SHPShopeeSpecificHooksInstalled = NO;
 
@@ -275,6 +277,16 @@ static NSString *SHPURLStringFromRequestLikeObject(id object) {
     }
 
     return nil;
+}
+
+static BOOL SHPURLStringIsPDP(NSString *urlString) {
+    if (!urlString.length) {
+        return NO;
+    }
+    NSString *lowerURL = urlString.lowercaseString;
+    return [lowerURL containsString:@"/api/v4/pdp/"] ||
+           [lowerURL containsString:@"/api/v4/item/get"] ||
+           [lowerURL containsString:@"product/"];
 }
 
 static void SHPDispatchOnMainThread(dispatch_block_t block) {
@@ -973,8 +985,8 @@ static NSData *SHPGzipData(NSData *data) {
         }
     }
 
-    minValue = MAX(1, MIN(minValue, 60));
-    maxValue = MAX(1, MIN(maxValue, 60));
+    minValue = MAX(1, MIN(minValue, 120));
+    maxValue = MAX(1, MIN(maxValue, 120));
     if (minValue > maxValue) {
         NSInteger temp = minValue;
         minValue = maxValue;
@@ -1053,7 +1065,7 @@ static NSData *SHPGzipData(NSData *data) {
     [self.panelView addSubview:self.headerView];
 
     UILabel *titleLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-    titleLabel.text = @"格界";
+    titleLabel.text = @"Ajie";
     titleLabel.textColor = [UIColor colorWithRed:0.92 green:0.98 blue:0.98 alpha:1.0];
     titleLabel.font = [UIFont boldSystemFontOfSize:16.0];
     [self.headerView addSubview:titleLabel];
@@ -1159,7 +1171,7 @@ static NSData *SHPGzipData(NSData *data) {
     [self.panelView addSubview:self.logView];
 
     self.bubbleButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [self.bubbleButton setTitle:@"格界" forState:UIControlStateNormal];
+    [self.bubbleButton setTitle:@"Ajie" forState:UIControlStateNormal];
     [self.bubbleButton setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
     self.bubbleButton.titleLabel.font = [UIFont boldSystemFontOfSize:13.0];
     self.bubbleButton.backgroundColor = [UIColor colorWithRed:0.15 green:0.58 blue:0.63 alpha:0.94];
@@ -1969,7 +1981,7 @@ static NSData *SHPGzipData(NSData *data) {
     }
     NSInteger payloadApiType = [action isEqualToString:@"api1_login"] ? 1 : (self.apiType == 2 ? 2 : 1);
     payload[@"api_type"] = @(payloadApiType);
-    payload[@"client"] = @"ShopeeTaskHook";
+    payload[@"client"] = @"Ajie";
     payload[@"platform"] = @"ios";
     payload[@"device_type"] = @"ios";
     payload[@"bundle_id"] = kSHPBundleID;
@@ -2857,6 +2869,10 @@ static NSData *SHPGzipData(NSData *data) {
 }
 
 - (BOOL)navigateWithBTManagerToRoute:(NSString *)route {
+    if (!kSHPEnablePrivateNavigation) {
+        return NO;
+    }
+
     if (!route.length) {
         [self appendLog:@"跳转失败: route为空"];
         return NO;
@@ -2916,7 +2932,9 @@ static NSData *SHPGzipData(NSData *data) {
         route = [NSString stringWithFormat:@"rn/PRODUCT_PAGE?itemid=%@&shopid=%@", self.currentTask.itemID, self.currentTask.shopID];
     }
 
-    [self popToRootViewControllerIfNeeded];
+    if (kSHPEnablePrivateNavigation) {
+        [self popToRootViewControllerIfNeeded];
+    }
 
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         if ([self navigateWithBTManagerToRoute:route]) {
@@ -3178,7 +3196,7 @@ static NSData *SHPGzipData(NSData *data) {
         return;
     }
 
-    if (![urlString containsString:@"/api/v4/pdp/"]) {
+    if (!SHPURLStringIsPDP(urlString)) {
         return;
     }
 
@@ -3430,6 +3448,13 @@ static NSURLSession *SHPSessionWithConfigDelegateHook(id self, SEL _cmd, NSURLSe
 
     @try {
         Class delegateClass = [delegate class];
+        NSBundle *delegateBundle = [NSBundle bundleForClass:delegateClass];
+        NSString *delegateBundlePath = delegateBundle.bundlePath;
+        NSString *mainBundlePath = NSBundle.mainBundle.bundlePath;
+        if (delegateBundlePath.length && mainBundlePath.length && ![delegateBundlePath hasPrefix:mainBundlePath]) {
+            return session;
+        }
+
         NSString *className = NSStringFromClass(delegateClass);
         if (!className.length || SHPOriginalDidReceiveDataIMPMap[className]) {
             return session;
@@ -3473,12 +3498,14 @@ static NSURLSession *SHPSessionWithConfigDelegateHook(id self, SEL _cmd, NSURLSe
         SHPOriginalDidReceiveDataIMPMap = [NSMutableDictionary dictionary];
         SHPOriginalDidCompleteIMPMap = [NSMutableDictionary dictionary];
 
-        @try {
-            Class sessionClass = objc_getClass("NSURLSession");
-            if (sessionClass) {
-                MSHookMessageEx(object_getClass(sessionClass), @selector(sessionWithConfiguration:delegate:delegateQueue:), (IMP)&SHPSessionWithConfigDelegateHook, &SHPOriginalSessionWithConfigDelegateIMP);
-            }
-        } @catch (__unused NSException *e) {}
+        if (kSHPEnableSessionDelegateHooks) {
+            @try {
+                Class sessionClass = objc_getClass("NSURLSession");
+                if (sessionClass) {
+                    MSHookMessageEx(object_getClass(sessionClass), @selector(sessionWithConfiguration:delegate:delegateQueue:), (IMP)&SHPSessionWithConfigDelegateHook, &SHPOriginalSessionWithConfigDelegateIMP);
+                }
+            } @catch (__unused NSException *e) {}
+        }
 
         dispatch_async(dispatch_get_main_queue(), ^{
             [[SHPPluginController shared] start];
