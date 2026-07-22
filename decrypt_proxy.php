@@ -11,6 +11,7 @@ $AES_KEY  = '25d9a1907ab38e273c4f57c476e64377';
 $AUTH_HASH_FILE = __DIR__ . '/.auth_hash';
 $LOG_FILE = __DIR__ . '/decrypt_proxy_logs.jsonl';
 $DEVICE_FILE = __DIR__ . '/device_controls.json';
+$ANDROID_SESSION_FILE = __DIR__ . '/android_sessions.json';
 $UPDATE_FILE = __DIR__ . '/app_update.json';
 $PLUGIN_UPDATE_FILE = __DIR__ . '/plugin_update.json';
 $VERSION_CTRL_FILE = __DIR__ . '/version_controls.json';
@@ -935,6 +936,123 @@ function updateDeviceControl(string $file, string $key, bool $disabled, string $
         'msg' => $disabled ? '设备已禁用' : '设备已启用',
         'data' => $devices[$key],
     ];
+}
+
+
+function readAndroidSessions(string $file): array {
+    if (!is_file($file)) return [];
+    $data = json_decode((string)@file_get_contents($file), true);
+    return is_array($data) ? $data : [];
+}
+
+function saveAndroidSessions(string $file, array $sessions): void {
+    @file_put_contents($file, json_encode($sessions, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), LOCK_EX);
+}
+
+function androidManagedDeviceKeyFromInput(array $input): string {
+    $username = trim((string)($input['username'] ?? '')) ?: 'unknown';
+    $deviceId = trim((string)($input['device_id'] ?? '')) ?: ('unknown-' . substr(md5($_SERVER['REMOTE_ADDR'] ?? ''), 0, 8));
+    return deviceKey($username, $deviceId);
+}
+
+function syncAndroidSession(string $sessionFile, string $deviceFile, array $input): array {
+    $username = trim((string)($input['username'] ?? '')) ?: 'unknown';
+    $deviceId = trim((string)($input['device_id'] ?? '')) ?: ('unknown-' . substr(md5($_SERVER['REMOTE_ADDR'] ?? ''), 0, 8));
+    $key = deviceKey($username, $deviceId);
+    $cookie = trim((string)($input['cookies'] ?? $input['cookie'] ?? ''));
+    $cookieUrl = trim((string)($input['cookie_url'] ?? $input['url'] ?? ''));
+    $host = trim((string)($input['cookie_host'] ?? ''));
+    if ($host === '' && $cookieUrl !== '') {
+        $parts = parse_url($cookieUrl);
+        $host = is_array($parts) ? (string)($parts['host'] ?? '') : '';
+    }
+    if ($cookie === '') return ['ok' => false, 'success' => false, 'msg' => 'cookie empty'];
+
+    $deviceCheck = checkDeviceAllowed($deviceFile, $input + ['username' => $username, 'device_id' => $deviceId, 'api_type' => 1]);
+    if (empty($deviceCheck['allowed'])) return ['ok' => false, 'success' => false, 'msg' => $deviceCheck['msg'] ?? 'device disabled', 'device_key' => $key];
+
+    $sessions = readAndroidSessions($sessionFile);
+    $sessions[$key] = [
+        'key' => $key,
+        'username' => $username,
+        'device_id' => $deviceId,
+        'fingerprint_key' => trim((string)($input['fingerprint_key'] ?? '')),
+        'device_label' => trim((string)($input['device_label'] ?? '')),
+        'cookie' => $cookie,
+        'cookie_len' => strlen($cookie),
+        'cookie_url' => $cookieUrl,
+        'cookie_host' => $host,
+        'user_agent' => trim((string)($input['user_agent'] ?? $input['ua'] ?? '')),
+        'ip' => $_SERVER['REMOTE_ADDR'] ?? '',
+        'updated_at' => date('Y-m-d H:i:s'),
+    ];
+    saveAndroidSessions($sessionFile, $sessions);
+
+    $devices = readDeviceControls($deviceFile);
+    $old = $devices[$key] ?? [];
+    $devices[$key] = array_merge($old, [
+        'key' => $key,
+        'username' => $username,
+        'device_id' => $deviceId,
+        'fingerprint_key' => trim((string)($input['fingerprint_key'] ?? ($old['fingerprint_key'] ?? ''))),
+        'platform' => 'android',
+        'device_type' => trim((string)($input['device_type'] ?? 'android')),
+        'device_label' => trim((string)($input['device_label'] ?? ($old['device_label'] ?? 'Android'))),
+        'client' => trim((string)($input['client'] ?? 'ajie-android')),
+        'client_label' => trim((string)($input['client_label'] ?? 'Ajie Android')),
+        'ip' => $_SERVER['REMOTE_ADDR'] ?? '',
+        'last_seen' => date('Y-m-d H:i:s'),
+        'first_seen' => $old['first_seen'] ?? date('Y-m-d H:i:s'),
+        'disabled' => !empty($old['disabled']),
+        'disabled_reason' => $old['disabled_reason'] ?? '',
+        'has_android_session' => true,
+        'android_session_at' => date('Y-m-d H:i:s'),
+        'android_cookie_host' => $host,
+        'android_command' => $old['android_command'] ?? 'run',
+        'android_poll_interval_seconds' => max(10, (int)($old['android_poll_interval_seconds'] ?? 30)),
+    ]);
+    saveDeviceControls($deviceFile, $devices);
+
+    return ['ok' => true, 'success' => true, 'msg' => 'session synced', 'device_key' => $key, 'data' => ['has_session' => true, 'cookie_host' => $host]];
+}
+
+function pollAndroidDevice(string $deviceFile, string $sessionFile, array $input): array {
+    $hb = updateDeviceHeartbeat($deviceFile, $input + ['api_type' => 1, 'platform' => 'android', 'client' => ($input['client'] ?? 'ajie-android')]);
+    $key = (string)($hb['device_key'] ?? androidManagedDeviceKeyFromInput($input));
+    $devices = readDeviceControls($deviceFile);
+    $device = $devices[$key] ?? [];
+    $sessions = readAndroidSessions($sessionFile);
+    $hasSession = !empty($sessions[$key]['cookie']);
+    $disabled = !empty($device['disabled']);
+    $command = $disabled ? 'stop' : (string)($device['android_command'] ?? 'run');
+    if (!$hasSession && $command === 'run') $command = 'sync_session';
+    $interval = max(10, (int)($device['android_poll_interval_seconds'] ?? 30));
+    return [
+        'ok' => true,
+        'success' => true,
+        'allowed' => !$disabled,
+        'device_key' => $key,
+        'command' => $command,
+        'data' => [
+            'command' => $command,
+            'has_session' => $hasSession,
+            'poll_interval_seconds' => $interval,
+            'disabled_reason' => $device['disabled_reason'] ?? '',
+            'server_time' => date('Y-m-d H:i:s'),
+        ],
+    ];
+}
+
+function updateAndroidDeviceCommand(string $deviceFile, string $key, string $command, int $pollInterval = 0): array {
+    $allowed = ['run', 'pause', 'stop', 'sync_session', 'clear_session'];
+    if (!in_array($command, $allowed, true)) return ['ok' => false, 'msg' => 'bad command'];
+    $devices = readDeviceControls($deviceFile);
+    if ($key === '' || empty($devices[$key])) return ['ok' => false, 'msg' => 'device not found'];
+    $devices[$key]['android_command'] = $command;
+    if ($pollInterval > 0) $devices[$key]['android_poll_interval_seconds'] = max(10, min(300, $pollInterval));
+    $devices[$key]['updated_at'] = date('Y-m-d H:i:s');
+    saveDeviceControls($deviceFile, $devices);
+    return ['ok' => true, 'msg' => 'command saved', 'data' => $devices[$key]];
 }
 
 function readUpdateConfig(string $file): array {
@@ -4657,6 +4775,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['act'])) {
         jsonResp(updateDeviceControl($DEVICE_FILE, $deviceKey, $disabled, $reason));
     }
 
+
+
+    if ($act === 'android_device_command') {
+        $deviceKey = (string)($_GET['device_key'] ?? '');
+        $command = trim((string)($_GET['command'] ?? 'run'));
+        $interval = (int)($_GET['interval'] ?? 0);
+        jsonResp(updateAndroidDeviceCommand($DEVICE_FILE, $deviceKey, $command, $interval));
+    }
+
     if ($act === 'device_toggle_user') {
         $username = trim((string)($_GET['username'] ?? ''));
         $disabled = (int)($_GET['disabled'] ?? 0) === 1;
@@ -4986,6 +5113,51 @@ $input = normalizeWebPluginPayload($input);
 $requestJsonMs = durationMs($stageMark, microtime(true));
 
 $postAct = (string)($input['act'] ?? '');
+
+if ($postAct === 'android_session_sync') {
+    jsonResp(syncAndroidSession($ANDROID_SESSION_FILE, $DEVICE_FILE, $input));
+}
+
+if ($postAct === 'android_device_poll') {
+    jsonResp(pollAndroidDevice($DEVICE_FILE, $ANDROID_SESSION_FILE, $input));
+}
+
+if ($postAct === 'android_task_take') {
+    $takeStart = microtime(true);
+    $username = trim((string)($input['username'] ?? '')) ?: 'android';
+    $deviceCheck = checkDeviceAllowed($DEVICE_FILE, $input + ['username' => $username, 'api_type' => 1, 'platform' => 'android']);
+    if (empty($deviceCheck['allowed'])) jsonResp(['ok' => false, 'success' => false, 'code' => '403', 'msg' => $deviceCheck['msg'] ?? 'device disabled']);
+
+    $tokenInfo = getApi1Token($API1_AUTH, $API1_TOKEN_FILE);
+    if (empty($tokenInfo['ok']) || empty($tokenInfo['token'])) {
+        jsonResp(['ok' => false, 'success' => false, 'code' => '502', 'msg' => (string)($tokenInfo['msg'] ?? 'task server login failed')]);
+    }
+    $stageMark = microtime(true);
+    $result = forwardGetToServer($API1_TAKE_URL, ['Authorization: Bearer ' . (string)$tokenInfo['token']]);
+    $serverResp = json_decode((string)$result['response'], true);
+    $forwardMs = durationMs($stageMark, microtime(true));
+    $takeOk = is_array($serverResp) && (string)($serverResp['code'] ?? '') === '200' && !empty($serverResp['data']['taskUrl']);
+    appendLog($LOG_FILE, [
+        'time' => date('Y-m-d H:i:s'),
+        'api_type' => 1,
+        'ip' => $_SERVER['REMOTE_ADDR'] ?? '',
+        'username' => $username,
+        'device_id' => $input['device_id'] ?? '',
+        'fingerprint_key' => $input['fingerprint_key'] ?? '',
+        'status' => $result['error'] ? 'forward_fail' : ($takeOk ? 'success' : 'task_server_error'),
+        'source' => 'android_managed_take',
+        'forward_url' => $API1_TAKE_URL,
+        'response' => compactLogResponse($serverResp ?? $result['response'], $MAX_LOG_RESPONSE_BYTES),
+        'timing_ms' => ['raw_read' => $rawReadMs, 'request_json' => $requestJsonMs, 'forward' => $forwardMs, 'total' => elapsedMs($takeStart)],
+    ], $MAX_LOGS);
+    if ($result['error']) jsonResp(['ok' => false, 'success' => false, 'code' => '500', 'msg' => 'take forward failed: ' . $result['error']]);
+    if (is_array($serverResp)) {
+        $serverResp['_proxy'] = ['source' => 'android_managed_take', 'token_source' => !empty($tokenInfo['cached']) ? 'cache' : 'login'];
+        jsonResp($serverResp);
+    }
+    jsonResp(['ok' => false, 'success' => false, 'code' => '500', 'msg' => 'task server abnormal', 'raw' => $result['response']]);
+}
+
 if ($postAct === 'api1_login') {
     $username = trim((string)($input['username'] ?? ''));
     $password = (string)($input['password'] ?? '');
@@ -5172,19 +5344,22 @@ if ($postAct === 'android_session_fetch_submit') {
     if ($cookies === '') jsonResp(['ok' => false, 'msg' => 'webview cookie empty']);
     if (!androidSessionAllowedTaskUrl($taskUrl)) jsonResp(['ok' => false, 'msg' => 'task url host not allowed']);
 
-    decodedExtensionSyncAllTaskAccountsToApi1Whitelist();
-    $allowed = readApi1AllowedAccounts($API1_ACCOUNTS_FILE);
-    if (!in_array($username, accountNames($allowed), true)) {
-        appendLog($LOG_FILE, [
-            'time' => date('Y-m-d H:i:s'),
-            'api_type' => 1,
-            'ip' => $_SERVER['REMOTE_ADDR'] ?? '',
-            'username' => $username,
-            'status' => 'android_session_rejected',
-            'source' => 'android_session_fetch_submit',
-            'error' => 'account not whitelisted',
-        ], $MAX_LOGS);
-        jsonResp(['code' => '403', 'data' => null, 'msg' => 'account not authorized']);
+    $isManagedAndroid = strtolower(trim((string)($input['client'] ?? ''))) === 'ajie-android';
+    if (!$isManagedAndroid) {
+        decodedExtensionSyncAllTaskAccountsToApi1Whitelist();
+        $allowed = readApi1AllowedAccounts($API1_ACCOUNTS_FILE);
+        if (!in_array($username, accountNames($allowed), true)) {
+            appendLog($LOG_FILE, [
+                'time' => date('Y-m-d H:i:s'),
+                'api_type' => 1,
+                'ip' => $_SERVER['REMOTE_ADDR'] ?? '',
+                'username' => $username,
+                'status' => 'android_session_rejected',
+                'source' => 'android_session_fetch_submit',
+                'error' => 'account not whitelisted',
+            ], $MAX_LOGS);
+            jsonResp(['code' => '403', 'data' => null, 'msg' => 'account not authorized']);
+        }
     }
 
     $deviceCheck = checkDeviceAllowed($DEVICE_FILE, $input + ['api_type' => 1]);
@@ -5258,6 +5433,10 @@ if ($postAct === 'android_session_fetch_submit') {
         'url' => $taskUrl,
         'result' => $responseBodyRaw,
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($submitToken === '') {
+        $tokenInfo = getApi1Token($API1_AUTH, $API1_TOKEN_FILE);
+        if (!empty($tokenInfo['ok']) && !empty($tokenInfo['token'])) $submitToken = (string)$tokenInfo['token'];
+    }
     $forwardHeaders = [];
     if ($submitToken !== '') $forwardHeaders[] = 'Authorization: Bearer ' . $submitToken;
 
@@ -8013,15 +8192,19 @@ async function loadDevices() {
                 :`<span class="tag tag-success" style="font-size:11px">${isOnline?'在线':'离线'}</span>`;
             const deviceLabel=dv.device_label||(String(dv.platform||dv.device_type||'').toLowerCase()==='ios'?'iOS设备':'-');
             const singleBtn=dis
-                ?`<button class="btn btn-success btn-sm" onclick="toggleDevice('${esc(dv.key)}',0)">启用</button>`
-                :`<button class="btn btn-danger btn-sm" onclick="toggleDevice('${esc(dv.key)}',1)">禁用</button>`;
+                ?`<button class="btn btn-success btn-sm" onclick="toggleDevice('${esc(dv.key)}',0)">\u542f\u7528</button>`
+                :`<button class="btn btn-danger btn-sm" onclick="toggleDevice('${esc(dv.key)}',1)">\u7981\u7528</button>`;
+            const cmd=dv.android_command||'run';
+            const hasSession=!!dv.has_android_session;
+            const cmdBtns=`<button class="btn btn-success btn-sm" onclick="setAndroidCommand('${esc(dv.key)}','run')">\u542f\u52a8</button><button class="btn btn-warning btn-sm" onclick="setAndroidCommand('${esc(dv.key)}','pause')">\u6682\u505c</button><button class="btn btn-default btn-sm" onclick="setAndroidCommand('${esc(dv.key)}','sync_session')">\u540c\u6b65\u4f1a\u8bdd</button><button class="btn btn-danger btn-sm" onclick="setAndroidCommand('${esc(dv.key)}','clear_session')">\u6e05\u4f1a\u8bdd</button>`;
             return `<tr>
                 <td>${st}</td>
                 <td>${esc(deviceLabel)} ${esc(dv.fingerprint_name||((dv.fingerprint_id||dv.fingerprint_key||'').substring(0,14))||'-')}</td>
                 <td style="font-size:12px">${esc((dv.device_id||'-').substring(0,14))}</td>
                 <td style="font-size:12px">${esc(dv.ip||'-')}</td>
                 <td style="font-size:12px;color:var(--muted)">${esc((dv.last_seen||'').substring(11)||'-')}</td>
-                <td style="display:flex;gap:6px">${singleBtn}</td>
+                <td style="font-size:12px">${hasSession?'\u5df2\u540c\u6b65':'\u672a\u540c\u6b65'} / ${esc(cmd)}</td>
+                <td style="display:flex;gap:6px;flex-wrap:wrap">${singleBtn}${cmdBtns}</td>
             </tr>`;
         }).join('');
 
@@ -8047,6 +8230,13 @@ async function toggleUserDevices(username,dis){
     let reason='';
     if(dis){reason=prompt('禁用 '+username+' 所有设备的原因','账号已被下线，禁止使用');if(!reason)return;}
     await authFetch(BASE+'?act=device_toggle_user&username='+encodeURIComponent(username)+'&disabled='+dis+'&reason='+encodeURIComponent(reason));
+    loadDevices();
+}
+
+
+async function setAndroidCommand(dk,cmd){
+    if(!dk)return;
+    await authFetch(BASE+'?act=android_device_command&device_key='+encodeURIComponent(dk)+'&command='+encodeURIComponent(cmd));
     loadDevices();
 }
 

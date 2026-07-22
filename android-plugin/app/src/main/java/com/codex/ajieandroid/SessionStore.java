@@ -29,4 +29,13 @@ public final class SessionStore {
     public static void putBool(Context c, String key, boolean val) {
         sp(c).edit().putBoolean(key, val).apply();
     }
+
+    public static String username(Context c) {
+        String u = get(c, "username", "").trim();
+        if (u.isEmpty()) {
+            u = DeviceInfo.defaultAccount(c);
+            put(c, "username", u);
+        }
+        return u;
+    }
 }

@@ -16,12 +16,10 @@ public final class ApiClient {
 
     private final Context context;
     private final String serverUrl;
-    private final String authKey;
 
     public ApiClient(Context context) {
         this.context = context.getApplicationContext();
         this.serverUrl = SessionStore.get(context, "server_url", SessionStore.DEFAULT_SERVER);
-        this.authKey = SessionStore.get(context, "auth_key", "a1998510");
     }
 
     public void postAsync(JSONObject body, Callback cb) {
@@ -47,7 +45,6 @@ public final class ApiClient {
         conn.setDoOutput(true);
         conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
         conn.setRequestProperty("Accept", "application/json, text/plain, */*");
-        if (authKey != null && !authKey.isEmpty()) conn.setRequestProperty("X-Auth-Key", authKey);
         String token = SessionStore.get(context, "token", "");
         if (!token.isEmpty()) conn.setRequestProperty("Authorization", "Bearer " + token);
 
@@ -62,13 +59,26 @@ public final class ApiClient {
         try { out = new JSONObject(resp); }
         catch (Exception parse) {
             out = new JSONObject();
+            out.put("success", false);
             out.put("ok", false);
             out.put("code", String.valueOf(code));
-            out.put("msg", "non-json response");
+            out.put("msg", "\u670d\u52a1\u5668\u8fd4\u56de\u4e86\u975e JSON \u5185\u5bb9");
             out.put("raw", resp);
         }
         out.put("_http", code);
         return out;
+    }
+
+    public static boolean ok(JSONObject json) {
+        if (json == null) return false;
+        if (json.optBoolean("success", false) || json.optBoolean("ok", false)) return true;
+        String code = json.optString("code", "");
+        return "200".equals(code) || "0".equals(code);
+    }
+
+    public static String compact(JSONObject json) {
+        String s = json == null ? "" : json.toString();
+        return s.length() > 1200 ? s.substring(0, 1200) + "..." : s;
     }
 
     private static String readAll(InputStream is) throws Exception {

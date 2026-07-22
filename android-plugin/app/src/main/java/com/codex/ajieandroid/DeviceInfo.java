@@ -17,21 +17,27 @@ public final class DeviceInfo {
 
     public static String fingerprintKey(Context c) {
         String raw = androidId(c) + "|" + Build.BRAND + "|" + Build.MODEL + "|" + Build.VERSION.SDK_INT;
-        return sha256(raw).substring(0, 16);
+        String hash = sha256(raw);
+        return hash.length() >= 16 ? hash.substring(0, 16) : hash;
+    }
+
+    public static String defaultAccount(Context c) {
+        return "android-" + fingerprintKey(c);
     }
 
     public static JSONObject common(Context c) throws JSONException {
         JSONObject o = new JSONObject();
         o.put("platform", "android");
-        o.put("client", "android_plugin");
-        o.put("client_label", "??? Root WebView ????");
+        o.put("client", "ajie-android");
+        o.put("client_label", "Ajie \u5b89\u5353\u52a9\u624b");
         o.put("device_type", "Android " + Build.VERSION.RELEASE);
         o.put("device_label", Build.MANUFACTURER + " " + Build.MODEL);
         o.put("device_id", androidId(c));
         o.put("fingerprint_key", fingerprintKey(c));
+        o.put("username", SessionStore.username(c));
         o.put("appVersion", "vv2");
-        o.put("version", "1.0.0");
-        o.put("version_code", 1);
+        o.put("version", "1.1.0");
+        o.put("version_code", 3);
         return o;
     }
 
