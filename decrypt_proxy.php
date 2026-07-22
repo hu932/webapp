@@ -1058,7 +1058,8 @@ function pollAndroidDevice(string $deviceFile, string $sessionFile, array $input
     $interval = max(10, (int)($device['android_poll_interval_seconds'] ?? 30));
     if (isset($devices[$key])) {
         $lastDelivered = (string)($devices[$key]['last_android_command_delivered'] ?? '');
-        if ($lastDelivered !== $command) {
+        $pendingDelivery = empty($devices[$key]['android_command_delivered']);
+        if ($pendingDelivery || $lastDelivered !== $command) {
             global $LOG_FILE, $MAX_LOGS;
             $devices[$key]['last_android_command_delivered'] = $command;
             $devices[$key]['last_android_command_delivered_at'] = date('Y-m-d H:i:s');
@@ -1066,6 +1067,7 @@ function pollAndroidDevice(string $deviceFile, string $sessionFile, array $input
             saveDeviceControls($deviceFile, $devices);
             appendLog($LOG_FILE, [
                 'time' => date('Y-m-d H:i:s'),
+                'api_type' => 1,
                 'status' => 'android_command_delivered',
                 'source' => 'android_device_poll',
                 'msg' => 'Android app polled and received command',
@@ -1103,12 +1105,15 @@ function updateAndroidDeviceCommand(string $deviceFile, string $key, string $com
     if ($key === '' || empty($devices[$key])) return ['ok' => false, 'msg' => 'device not found'];
     $devices[$key]['android_command'] = $command;
     $devices[$key]['android_command_at'] = date('Y-m-d H:i:s');
+    $devices[$key]['android_command_seq'] = (int)($devices[$key]['android_command_seq'] ?? 0) + 1;
     $devices[$key]['android_command_delivered'] = false;
+    $devices[$key]['api_type'] = 1;
     if ($pollInterval > 0) $devices[$key]['android_poll_interval_seconds'] = max(10, min(300, $pollInterval));
     $devices[$key]['updated_at'] = date('Y-m-d H:i:s');
     saveDeviceControls($deviceFile, $devices);
     appendLog($LOG_FILE, [
         'time' => date('Y-m-d H:i:s'),
+        'api_type' => 1,
         'status' => 'android_command_saved',
         'source' => 'android_admin_control',
         'msg' => 'Android command saved, waiting for app poll',
@@ -4843,6 +4848,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['act'])) {
             )) $match = true;
             if (!$match) continue;
             if (!str_contains($source, 'android') && !in_array($source, ['api1_take', 'api1_login'], true) && $client !== 'ajie-android') continue;
+            $log['api_type'] = 1;
             $items[] = $log;
             if ($status === 'android_command_saved') $summary['command_saved']++;
             if ($status === 'android_command_delivered') $summary['command_delivered']++;
@@ -4874,6 +4880,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['act'])) {
     if ($act === 'devices') {
         $devices = array_values(readDeviceControls($DEVICE_FILE));
         foreach ($devices as &$device) {
+            $clientLower = strtolower((string)($device['client'] ?? ''));
+            $platformLower = strtolower((string)($device['platform'] ?? $device['device_type'] ?? ''));
+            if ($clientLower === 'ajie-android' || $platformLower === 'android') $device['api_type'] = 1;
             $u = (string)($device['username'] ?? '');
             $remark = displayAccountRemark((int)($device['api_type'] ?? 0), $u, (string)($device['group_id'] ?? ''));
             if ($remark === '') $remark = displayDecodedExtensionAccountRemark($u);
@@ -8264,8 +8273,10 @@ function renderLogEntries(logs, target) {
     if (!logs.length) { el.innerHTML='<div class="empty">暂无日志</div>'; return; }
     el.innerHTML = logs.map(l => {
         const st = l.status||'';
-        const apiTag = `<span class="tag tag-${l.api_type===1?'blue':'info'}">${l.api_type===1?'聚星':'调速'}</span>`;
         const source = String(l.source||'');
+        const isAndroidLog = source.indexOf('android')>=0 || String(l.client||'').toLowerCase()==='ajie-android' || String(l.platform||'').toLowerCase()==='android';
+        const apiNum = isAndroidLog ? 1 : Number(l.api_type||0);
+        const apiTag = `<span class="tag tag-${apiNum===1?'blue':'info'}">${apiNum===1?'\u805a\u661f':'\u8c03\u901f'}</span>`;
         const deviceLabel = logDeviceLabel(l);
         const clientLabel = l.client_label || (source.indexOf('ctrl_')===0 ? '中控' : (source.indexOf('web_')===0 ? '网页插件' : ''));
         const deviceTag = deviceLabel ? `<span class="tag tag-info">\u8bbe\u5907:${esc(deviceLabel)}</span>` : '';
@@ -8442,7 +8453,8 @@ async function loadAndroidDeviceLogs(){
     const el=document.getElementById('androidLogList');
     if(!el)return;
     if(!logs.length){el.innerHTML='<div class="empty">\u6682\u65e0\u65e5\u5fd7\u3002\u8bf7\u786e\u8ba4 App \u540e\u53f0\u6258\u7ba1\u670d\u52a1\u5df2\u542f\u52a8\u5e76\u4fdd\u6301\u5728\u7ebf\u3002</div>';return;}
-    el.innerHTML=logs.map(l=>{
+    const waitTip=(sum.command_saved||0)>0&&(sum.command_delivered||0)===0?'<div class="empty" style="padding:12px;color:var(--warning)">\u547d\u4ee4\u5df2\u4fdd\u5b58\uff0c\u4f46 App \u8fd8\u6ca1\u6709\u8f6e\u8be2\u62ff\u5230\u3002\u8bf7\u786e\u8ba4 App \u6258\u7ba1\u670d\u52a1\u6b63\u5728\u8fd0\u884c\u3002</div>':'';
+    el.innerHTML=waitTip+logs.map(l=>{
         const st=String(l.status||'');
         const source=String(l.source||'');
         const cls=st==='success'?'tag-success':(st.includes('fail')||st.includes('error')?'tag-danger':(st.includes('saved')||st.includes('delivered')?'tag-info':'tag-warning'));
